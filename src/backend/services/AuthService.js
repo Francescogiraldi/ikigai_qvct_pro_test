@@ -3,6 +3,39 @@
 
 import { supabase, handleSupabaseError } from '../../shared/supabase';
 
+// Fonction utilitaire pour envoyer un email de bienvenue via le webhook Make
+async function sendWelcomeEmail(email, userData, type = 'email') {
+  try {
+    // Extraire le nom selon le format des données utilisateur
+    let nom = '';
+    if (type === 'email') {
+      // Pour l'inscription par email, userData est l'objet data
+      nom = userData?.user?.user_metadata?.full_name || '';
+    } else {
+      // Pour l'authentification Google, userData est l'objet user
+      nom = userData?.user_metadata?.full_name || userData?.user_metadata?.name || '';
+    }
+
+    await fetch('https://hook.eu2.make.com/lug2alohxnexe5nf212fmsjmo8qy7a13', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email,
+        nom: nom,
+        date_inscription: new Date().toISOString(),
+        type_inscription: type
+      })
+    });
+    console.log(`Email de bienvenue envoyé avec succès via Make (${type})`);
+    return true;
+  } catch (webhookError) {
+    console.error(`Erreur lors de l'envoi de l'email de bienvenue (${type}):`, webhookError);
+    return false;
+  }
+}
+
 class AuthService {
   // Récupérer l'utilisateur actuel
   static async getCurrentUser() {
@@ -33,6 +66,9 @@ class AuthService {
       if (!data || !data.user) {
         throw new Error("Erreur lors de l'inscription. Veuillez réessayer.");
       }
+      
+      // Envoyer un email de bienvenue via le webhook Make
+      await sendWelcomeEmail(email, data, 'email');
       
       return {
         user: data.user,
@@ -140,6 +176,11 @@ class AuthService {
         throw error;
       }
       
+      // Note: Pour l'authentification Google, l'email de bienvenue sera envoyé
+      // après la redirection et l'authentification réussie
+      // Nous ajoutons un flag dans la session pour indiquer qu'un email doit être envoyé
+      sessionStorage.setItem('sendWelcomeEmail', 'true');
+      
       return {
         success: true,
         message: 'Redirection vers Google...'
@@ -231,6 +272,14 @@ class AuthService {
   static async isAuthenticated() {
     try {
       const user = await this.getCurrentUser();
+      
+      // Vérifier si nous devons envoyer un email de bienvenue après une authentification Google
+      if (user && sessionStorage.getItem('sendWelcomeEmail') === 'true') {
+        await sendWelcomeEmail(user.email, user, 'google');
+        // Supprimer le flag pour éviter d'envoyer l'email plusieurs fois
+        sessionStorage.removeItem('sendWelcomeEmail');
+      }
+      
       return !!user;
     } catch (error) {
       return false;
