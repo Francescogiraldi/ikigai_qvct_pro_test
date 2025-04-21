@@ -389,8 +389,7 @@
   border-radius: 20px;
   display: flex;
   flex-direction: column;
-  min-height: auto;
-  max-height: 90vh;
+  min-height: 80vh;
   background: white;
   overflow: hidden;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
@@ -401,7 +400,6 @@
   .onboarding-journey-container {
     border-radius: 16px;
     padding: 16px;
-    max-height: 85vh;
   }
   
   .session-title {

@@ -212,8 +212,9 @@ const TextWithSuggestions = ({
 
   return (
     <div className="text-with-suggestions-container" style={{ 
-      position: 'relative',
-      marginBottom: '30px'
+      position: 'relative', 
+      minHeight: showSuggestions && filteredSuggestions.length > 0 ? '400px' : 'auto',
+      marginBottom: '50px'
     }}>
       {/* Conteneur d'entrée avec z-index élevé */}
       <div className="input-container" style={{ position: 'relative', zIndex: 1 }}>
@@ -276,11 +277,12 @@ const TextWithSuggestions = ({
         )}
       </div>
 
-      {/* Conteneur de suggestions */}
+      {/* Conteneur de suggestions avec espace suffisant et positionnement amélioré */}
       <div className="suggestions-container" style={{ 
-        position: 'relative', 
+        position: 'absolute', 
         width: '100%',
-        marginTop: '5px',
+        top: multiline ? '120px' : '60px',
+        left: 0,
         zIndex: 1000
       }}>
         <AnimatePresence>
