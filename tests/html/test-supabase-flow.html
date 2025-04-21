@@ -318,12 +318,17 @@
 
     <!-- Chargement des librairies -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.6/dist/umd/supabase.min.js"></script>
+    <script src="../config.js"></script>
     
     <script>
-        // Configuration Supabase
-        const supabaseUrl = 'https://mgegwthaogszzgflwery.supabase.co';
-        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1nZWd3dGhhb2dzenpnZmx3ZXJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxMjUyMjIsImV4cCI6MjA1OTcwMTIyMn0.ojqRmmC1O4sFTJDydtdSQ15J5ywMyCNBAkMYAkqYQxM';
+        // Configuration Supabase depuis le fichier de configuration centralisé
+        const { supabaseUrl, supabaseAnonKey } = getTestConfig();
         const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        
+        // Vérifier si les clés sont définies
+        if (!supabaseUrl || !supabaseAnonKey) {
+            alert('ATTENTION: Variables d\'environnement Supabase non définies. Veuillez configurer votre fichier .env');
+        }
         
         // État global du test
         const testState = {

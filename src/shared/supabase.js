@@ -7,20 +7,16 @@ const getSupabaseConfig = () => {
   const url = process.env.REACT_APP_SUPABASE_URL;
   const key = process.env.REACT_APP_SUPABASE_ANON_KEY;
   
-  // Si les variables d'environnement ne sont pas définies, utiliser les valeurs par défaut
-  // mais de manière plus sécurisée
+  // Si les variables d'environnement ne sont pas définies, afficher un avertissement
   if (!url || !key) {
-    console.warn('Variables d\'environnement Supabase non définies, utilisation des URL et clés de secours');
+    console.warn('ATTENTION: Variables d\'environnement Supabase non définies. Veuillez configurer votre fichier .env');
+    console.warn('Voir le fichier .env.template pour les variables à configurer');
     
-    // Utilisation de valeurs stockées de manière plus sécurisée
-    // Note: Dans un environnement de production, ces valeurs devraient être définies dans les variables d'environnement
-    // et non hardcodées dans le code, même encodées.
-    // Pour une sécurité renforcée, nous utilisons le même format que les variables d'environnement
-    // mais nous déplaçons les clés réelles dans un fichier .env
+    // Retourner des valeurs vides pour éviter les erreurs
+    // L'application devrait gérer ce cas et afficher un message approprié
     return { 
-      supabaseUrl: 'https://mgegwthaogszzgflwery.supabase.co', 
-      // Nous utilisons une clé d'invité avec des permissions limitées
-      supabaseAnonKey: process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1nZWd3dGhhb2dzenpmZWx3ZXJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxMjUyMjIsImV4cCI6MjA1OTcwMTIyMn0.ojqRmmC1O4sFTJDydtdSQ15J5ywMyCNBAkMYAkqYQxM' 
+      supabaseUrl: '', 
+      supabaseAnonKey: '' 
     };
   }
   

@@ -9,10 +9,15 @@
 // Utilisation de require pour la compatibilité avec Node.js sans configuration supplémentaire
 const { createClient } = require('@supabase/supabase-js');
 
-// Création manuelle du client Supabase pour ne pas dépendre de l'import
-const supabaseUrl = 'https://mgegwthaogszzgflwery.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1nZWd3dGhhb2dzenpnZmx3ZXJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxMjUyMjIsImV4cCI6MjA1OTcwMTIyMn0.ojqRmmC1O4sFTJDydtdSQ15J5ywMyCNBAkMYAkqYQxM';
+// Importer la configuration centralisée pour les tests
+const { getTestConfig } = require('../config');
+
+// Obtenir la configuration Supabase de manière sécurisée
+const { supabaseUrl, supabaseAnonKey } = getTestConfig();
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Note: Pour la production, utilisez les variables d'environnement
+// Voir le fichier .env.template pour les variables à configurer
 
 // Implémentation simplifiée des services pour les tests
 const AuthService = {
