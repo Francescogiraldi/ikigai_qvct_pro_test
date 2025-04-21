@@ -286,9 +286,10 @@ class AuthService {
     }
   }
   
-  // Réinitialisation de mot de passe
+  // Réinitialisation de mot de passe avec email personnalisé via Make
   static async resetPassword(email) {
     try {
+      // Générer un lien de réinitialisation via Supabase
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
@@ -296,6 +297,27 @@ class AuthService {
       // Vérifier s'il y a une erreur
       if (error) {
         throw error;
+      }
+      
+      // Envoyer un email personnalisé via le webhook Make
+      try {
+        await fetch('https://hook.eu2.make.com/pegesm7e33qiz22d1alw86hekodzsqvn', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: email,
+            date_demande: new Date().toISOString(),
+            // Note: Le lien de réinitialisation est géré par Supabase et envoyé dans l'email par défaut
+            // Make utilisera son propre template pour envoyer un email personnalisé
+            app_url: window.location.origin
+          })
+        });
+        console.log('Email de réinitialisation personnalisé envoyé avec succès via Make');
+      } catch (webhookError) {
+        console.error('Erreur lors de l\'envoi de l\'email personnalisé via Make:', webhookError);
+        // Même en cas d'erreur du webhook, on continue car Supabase a déjà envoyé un email par défaut
       }
       
       return {

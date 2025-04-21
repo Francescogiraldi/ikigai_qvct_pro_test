@@ -817,7 +817,7 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
         <div 
           ref={containerRef} 
           className="questions-display-area relative overflow-hidden"
-          style={{ minHeight: '350px' }}
+          style={{ minHeight: '280px', maxHeight: '60vh' }}
         >
           {renderQuestion()}
         </div>

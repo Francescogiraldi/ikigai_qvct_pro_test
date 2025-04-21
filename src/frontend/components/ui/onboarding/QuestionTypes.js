@@ -213,8 +213,8 @@ const TextWithSuggestions = ({
   return (
     <div className="text-with-suggestions-container" style={{ 
       position: 'relative', 
-      minHeight: showSuggestions && filteredSuggestions.length > 0 ? '400px' : 'auto',
-      marginBottom: '50px'
+      minHeight: showSuggestions && filteredSuggestions.length > 0 ? '300px' : 'auto',
+      marginBottom: '30px'
     }}>
       {/* Conteneur d'entrée avec z-index élevé */}
       <div className="input-container" style={{ position: 'relative', zIndex: 1 }}>
