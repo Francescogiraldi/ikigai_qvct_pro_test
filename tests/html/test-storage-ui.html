@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test d'enregistrement des réponses - IKIGAI</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #4a6fa5;
+      border-bottom: 2px solid #4a6fa5;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #5d8aa8;
+      margin-top: 30px;
+    }
+    .card {
+      background-color: #f9f9f9;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button {
+      background-color: #4a6fa5;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      background-color: #3a5a80;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 14px;
+    }
+    .success {
+      color: #2e7d32;
+      font-weight: bold;
+    }
+    .error {
+      color: #c62828;
+      font-weight: bold;
+    }
+    .info {
+      color: #1565c0;
+    }
+    textarea {
+      width: 100%;
+      height: 100px;
+      margin-bottom: 15px;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .status-online {
+      background-color: #4caf50;
+    }
+    .status-offline {
+      background-color: #f44336;
+    }
+    .log-container {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Test d'enregistrement des réponses - IKIGAI</h1>
+  
+  <div class="card">
+    <h2>Statut de connexion</h2>
+    <p>
+      <span id="connection-status">
+        <span class="status-indicator status-offline"></span>Non connecté
+      </span>
+      <button id="login-btn">Se connecter</button>
+      <button id="logout-btn" disabled>Se déconnecter</button>
+    </p>
+  </div>
+  
+  <div class="card">
+    <h2>Test d'enregistrement des réponses</h2>
+    <p>Utilisez les boutons ci-dessous pour tester les différentes fonctionnalités d'enregistrement des réponses.</p>
+    
+    <h3>Réponses d'onboarding</h3>
+    <textarea id="onboarding-data">{
+  "name": "Utilisateur Test",
+  "age": 30,
+  "goals": ["Réduire le stress", "Améliorer la concentration"],
+  "preferences": {
+    "notificationFrequency": "daily",
+    "themes": ["mindfulness", "productivity"]
+  }
+}</textarea>
+    <button id="save-onboarding-btn">Enregistrer réponses d'onboarding</button>
+    
+    <h3>Réponses de module</h3>
+    <textarea id="module-data">{
+  "question1": "Réponse à la question 1",
+  "question2": "Réponse à la question 2",
+  "rating": 4
+}</textarea>
+    <input type="text" id="module-id" value="mindfulness_1" placeholder="ID du module">
+    <button id="save-module-btn">Enregistrer réponses de module</button>
+    
+    <h3>Autres actions</h3>
+    <button id="sync-btn">Synchroniser les réponses en attente</button>
+    <button id="reset-btn">Réinitialiser les données</button>
+  </div>
+  
+  <div class="card">
+    <h2>Vérification des données</h2>
+    <button id="check-local-btn">Vérifier localStorage</button>
+    <button id="check-progress-btn">Vérifier user_progress</button>
+    <button id="check-responses-btn">Vérifier user_responses</button>
+  </div>
+  
+  <div class="card">
+    <h2>Journal d'activité</h2>
+    <div class="log-container" id="log"></div>
+  </div>
+
+  <!-- Chargement des scripts -->
+  <script type="module">
+    import { supabase } from '../../src/shared/supabase.js';
+    import StorageService from '../services/StorageService.js';
+
+    // Fonction pour ajouter un message au journal
+    function log(message, type = 'info') {
+      const logContainer = document.getElementById('log');
+      const logEntry = document.createElement('div');
+      logEntry.className = type;
+      logEntry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logContainer.prepend(logEntry);
+    }
+
+    // Fonction pour mettre à jour le statut de connexion
+    async function updateConnectionStatus() {
+      const statusElement = document.getElementById('connection-status');
+      const loginBtn = document.getElementById('login-btn');
+      const logoutBtn = document.getElementById('logout-btn');
+      
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          statusElement.innerHTML = `<span class="status-indicator status-online"></span>Connecté (${user.email})`;
+          loginBtn.disabled = true;
+          logoutBtn.disabled = false;
+          log(`Connecté en tant que ${user.email}`, 'success');
+        } else {
+          statusElement.innerHTML = `<span class="status-indicator status-offline"></span>Non connecté`;
+          loginBtn.disabled = false;
+          logoutBtn.disabled = true;
+        }
+      } catch (error) {
+        statusElement.innerHTML = `<span class="status-indicator status-offline"></span>Erreur de connexion`;
+        log(`Erreur lors de la vérification du statut: ${error.message}`, 'error');
+      }
+    }
+
+    // Initialisation
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Mettre à jour le statut de connexion
+      await updateConnectionStatus();
+      
+      // Connexion
+      document.getElementById('login-btn').addEventListener('click', async () => {
+        try {
+          log('Tentative de connexion...');
+          
+          // Utiliser la méthode signInWithOAuth pour Google
+          // Vous pouvez remplacer par un formulaire de connexion si nécessaire
+          const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              redirectTo: window.location.href
+            }
+          });
+          
+          if (error) throw error;
+        } catch (error) {
+          log(`Erreur de connexion: ${error.message}`, 'error');
+        }
+      });
+      
+      // Déconnexion
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+        try {
+          log('Déconnexion...');
+          const { error } = await supabase.auth.signOut();
+          if (error) throw error;
+          await updateConnectionStatus();
+          log('Déconnecté avec succès', 'success');
+        } catch (error) {
+          log(`Erreur de déconnexion: ${error.message}`, 'error');
+        }
+      });
+      
+      // Enregistrer les réponses d'onboarding
+      document.getElementById('save-onboarding-btn').addEventListener('click', async () => {
+        try {
+          const onboardingData = document.getElementById('onboarding-data').value;
+          const responses = JSON.parse(onboardingData);
+          
+          log('Enregistrement des réponses d\'onboarding...');
+          const result = await StorageService.saveModuleResponses('onboarding', responses);
+          log('Réponses d\'onboarding enregistrées avec succès', 'success');
+          log(`Timestamp: ${result.moduleResponses.onboarding.completedAt}`);
+        } catch (error) {
+          log(`Erreur lors de l'enregistrement des réponses d'onboarding: ${error.message}`, 'error');
+        }
+      });
+      
+      // Enregistrer les réponses de module
+      document.getElementById('save-module-btn').addEventListener('click', async () => {
+        try {
+          const moduleData = document.getElementById('module-data').value;
+          const moduleId = document.getElementById('module-id').value;
+          const responses = JSON.parse(moduleData);
+          
+          log(`Enregistrement des réponses du module ${moduleId}...`);
+          const result = await StorageService.saveModuleResponses(moduleId, responses);
+          log(`Réponses du module ${moduleId} enregistrées avec succès`, 'success');
+          log(`Timestamp: ${result.moduleResponses[moduleId].completedAt}`);
+        } catch (error) {
+          log(`Erreur lors de l'enregistrement des réponses de module: ${error.message}`, 'error');
+        }
+      });
+      
+      // Synchroniser les réponses en attente
+      document.getElementById('sync-btn').addEventListener('click', async () => {
+        try {
+          log('Synchronisation des réponses en attente...');
+          await StorageService.syncPendingResponses();
+          log('Synchronisation terminée', 'success');
+        } catch (error) {
+          log(`Erreur lors de la synchronisation: ${error.message}`, 'error');
+        }
+      });
+      
+      // Réinitialiser les données
+      document.getElementById('reset-btn').addEventListener('click', () => {
+        try {
+          log('Réinitialisation des données...');
+          StorageService.resetAllData();
+          log('Données réinitialisées avec succès', 'success');
+        } catch (error) {
+          log(`Erreur lors de la réinitialisation: ${error.message}`, 'error');
+        }
+      });
+      
+      // Vérifier localStorage
+      document.getElementById('check-local-btn').addEventListener('click', () => {
+        try {
+          log('Vérification des données dans localStorage...');
+          
+          // Vérifier les données de progression
+          const progressData = localStorage.getItem(StorageService.LOCAL_STORAGE_KEY);
+          if (progressData) {
+            const parsed = JSON.parse(progressData);
+            log('Données de progression trouvées:', 'success');
+            log(`Total points: ${parsed.totalPoints}`);
+            log(`Modules complétés: ${Object.keys(parsed.completedModules || {}).length}`);
+            
+            if (parsed.moduleResponses) {
+              log(`Réponses de modules: ${Object.keys(parsed.moduleResponses).join(', ')}`);
+            }
+          } else {
+            log('Aucune donnée de progression trouvée dans localStorage', 'info');
+          }
+          
+          // Vérifier les réponses en attente
+          const pendingResponses = localStorage.getItem('pending_user_responses');
+          if (pendingResponses) {
+            const parsed = JSON.parse(pendingResponses);
+            log(`${parsed.length} réponses en attente trouvées:`, 'info');
+            parsed.forEach((item, index) => {
+              log(`${index + 1}. Module: ${item.module_id}, Date: ${new Date(item.created_at).toLocaleString()}`);
+            });
+          } else {
+            log('Aucune réponse en attente trouvée', 'info');
+          }
+        } catch (error) {
+          log(`Erreur lors de la vérification de localStorage: ${error.message}`, 'error');
+        }
+      });
+      
+      // Vérifier user_progress
+      document.getElementById('check-progress-btn').addEventListener('click', async () => {
+        try {
+          log('Vérification des données dans user_progress...');
+          
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            log('Vous devez être connecté pour vérifier user_progress', 'error');
+            return;
+          }
+          
+          const { data, error } = await supabase
+            .from('user_progress')
+            .select('*')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (error) throw error;
+          
+          if (data) {
+            log('Données trouvées dans user_progress:', 'success');
+            log(`ID: ${data.id}`);
+            log(`User ID: ${data.user_id}`);
+            log(`Mise à jour: ${new Date(data.updated_at).toLocaleString()}`);
+            
+            const progressData = JSON.parse(data.progress_data);
+            log(`Total points: ${progressData.totalPoints}`);
+            
+            if (progressData.moduleResponses) {
+              const modules = Object.keys(progressData.moduleResponses);
+              log(`Réponses de modules (${modules.length}): ${modules.join(', ')}`);
+            }
+          } else {
+            log('Aucune donnée trouvée dans user_progress', 'info');
+          }
+        } catch (error) {
+          log(`Erreur lors de la vérification de user_progress: ${error.message}`, 'error');
+        }
+      });
+      
+      // Vérifier user_responses
+      document.getElementById('check-responses-btn').addEventListener('click', async () => {
+        try {
+          log('Vérification des données dans user_responses...');
+          
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            log('Vous devez être connecté pour vérifier user_responses', 'error');
+            return;
+          }
+          
+          const { data, error } = await supabase
+            .from('user_responses')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+          
+          if (error) throw error;
+          
+          if (data && data.length > 0) {
+            log(`${data.length} réponses trouvées dans user_responses:`, 'success');
+            
+            data.forEach((item, index) => {
+              if (index < 5) { // Limiter l'affichage aux 5 premières entrées
+                log(`${index + 1}. Module: ${item.module_id}, Date: ${new Date(item.created_at).toLocaleString()}`);
+              }
+            });
+            
+            if (data.length > 5) {
+              log(`... et ${data.length - 5} autres entrées`);
+            }
+          } else {
+            log('Aucune réponse trouvée dans user_responses', 'info');
+          }
+        } catch (error) {
+          log(`Erreur lors de la vérification de user_responses: ${error.message}`, 'error');
+        }
+      });
+    });
+
+    // Vérifier si l'URL contient un hash de redirection après connexion
+    if (window.location.hash.includes('access_token')) {
+      log('Redirection après connexion détectée, mise à jour du statut...');
+      setTimeout(updateConnectionStatus, 1000); // Attendre que Supabase traite le hash
+    }
+  </script>
+</body>
+</html>

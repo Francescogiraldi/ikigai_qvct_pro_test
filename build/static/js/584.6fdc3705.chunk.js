@@ -1,0 +1,1 @@
+(self.webpackChunkikigai_app_new=self.webpackChunkikigai_app_new||[]).push([[584],{4584:()=>{}}]);

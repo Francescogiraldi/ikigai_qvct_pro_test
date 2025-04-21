@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Flux Supabase pour IKIGAI</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #2563eb;
+        }
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input, button, select, textarea {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            width: 100%;
+            font-size: 16px;
+        }
+        button {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #1d4ed8;
+        }
+        .error {
+            color: #ef4444;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #fee2e2;
+            border: 1px solid #fecaca;
+        }
+        .success {
+            color: #10b981;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #d1fae5;
+            border: 1px solid #a7f3d0;
+        }
+        .result {
+            background-color: #f9fafb;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .step {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #2563eb;
+            background-color: #f8fafc;
+        }
+        .step h3 {
+            margin-top: 0;
+        }
+        .step-success {
+            border-left-color: #10b981;
+        }
+        .step-error {
+            border-left-color: #ef4444;
+        }
+        .step-pending {
+            border-left-color: #f59e0b;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        table, th, td {
+            border: 1px solid #e5e7eb;
+        }
+        th, td {
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f1f5f9;
+        }
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .actions button {
+            flex: 1;
+        }
+        .section-toggle {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f1f5f9;
+            margin-bottom: 10px;
+        }
+        .section-toggle:hover {
+            background-color: #e0e7ff;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test de Flux Supabase pour IKIGAI</h1>
+    <p>Cette page permet de tester l'intégration complète avec Supabase en simulant le flux d'un nouvel utilisateur.</p>
+    
+    <div class="card">
+        <h2>Configuration</h2>
+        <div class="form-group">
+            <label for="testEmail">Email de test (généré automatiquement)</label>
+            <input type="email" id="testEmail" readonly>
+        </div>
+        <div class="form-group">
+            <label for="testPassword">Mot de passe de test</label>
+            <input type="text" id="testPassword" value="Test@123456" readonly>
+        </div>
+        <div class="form-group">
+            <label for="cleanupData">Nettoyer les données après le test</label>
+            <select id="cleanupData">
+                <option value="no">Non (garder les données pour inspection)</option>
+                <option value="yes">Oui (supprimer les données de test)</option>
+            </select>
+        </div>
+        <button id="startTestButton">Démarrer le test complet</button>
+        <button id="stepByStepButton" style="background-color: #4f46e5;">Mode pas à pas</button>
+    </div>
+    
+    <div class="card">
+        <div class="section-toggle" id="logToggle">
+            <h2>Journal des opérations</h2>
+            <span>▼</span>
+        </div>
+        <div id="logSection">
+            <div id="logOutput" class="result">Aucune opération effectuée</div>
+        </div>
+    </div>
+    
+    <div id="stepByStepContainer" class="hidden">
+        <div class="card">
+            <h2>Test par étapes</h2>
+            <p>Exécutez chaque étape individuellement pour mieux comprendre le flux de données.</p>
+            
+            <div id="step1" class="step">
+                <h3>1. Inscription d'un nouvel utilisateur</h3>
+                <p>Crée un nouvel utilisateur dans Supabase Auth avec l'email et le mot de passe générés.</p>
+                <div class="actions">
+                    <button data-step="1">Exécuter</button>
+                </div>
+                <div id="step1-result"></div>
+            </div>
+            
+            <div id="step2" class="step">
+                <h3>2. Connexion utilisateur</h3>
+                <p>Se connecte avec les identifiants du nouvel utilisateur pour établir une session.</p>
+                <div class="actions">
+                    <button data-step="2">Exécuter</button>
+                </div>
+                <div id="step2-result"></div>
+            </div>
+            
+            <div id="step3" class="step">
+                <h3>3. Enregistrement des données d'onboarding</h3>
+                <p>Simule la complétion du processus d'onboarding et sauvegarde les réponses.</p>
+                <div class="actions">
+                    <button data-step="3">Exécuter</button>
+                </div>
+                <div id="step3-result"></div>
+            </div>
+            
+            <div id="step4" class="step">
+                <h3>4. Vérification des données d'onboarding</h3>
+                <p>Vérifie que les données d'onboarding ont été correctement enregistrées dans Supabase.</p>
+                <div class="actions">
+                    <button data-step="4">Exécuter</button>
+                </div>
+                <div id="step4-result"></div>
+            </div>
+            
+            <div id="step5" class="step">
+                <h3>5. Création de progression utilisateur</h3>
+                <p>Crée et sauvegarde des données de progression pour l'utilisateur (points, modules, etc.).</p>
+                <div class="actions">
+                    <button data-step="5">Exécuter</button>
+                </div>
+                <div id="step5-result"></div>
+            </div>
+            
+            <div id="step6" class="step">
+                <h3>6. Vérification des données de progression</h3>
+                <p>Vérifie que les données de progression ont été correctement enregistrées.</p>
+                <div class="actions">
+                    <button data-step="6">Exécuter</button>
+                </div>
+                <div id="step6-result"></div>
+            </div>
+            
+            <div id="step7" class="step">
+                <h3>7. Enregistrement de réponses de module</h3>
+                <p>Simule la complétion d'un module et l'enregistrement des réponses associées.</p>
+                <div class="actions">
+                    <button data-step="7">Exécuter</button>
+                </div>
+                <div id="step7-result"></div>
+            </div>
+            
+            <div id="step8" class="step">
+                <h3>8. Vérification des réponses de module</h3>
+                <p>Vérifie que les réponses du module ont été correctement enregistrées.</p>
+                <div class="actions">
+                    <button data-step="8">Exécuter</button>
+                </div>
+                <div id="step8-result"></div>
+            </div>
+            
+            <div id="step9" class="step">
+                <h3>9. Déconnexion</h3>
+                <p>Termine la session utilisateur.</p>
+                <div class="actions">
+                    <button data-step="9">Exécuter</button>
+                </div>
+                <div id="step9-result"></div>
+            </div>
+            
+            <div id="stepCleanup" class="step">
+                <h3>10. Nettoyage des données (optionnel)</h3>
+                <p>Supprime toutes les données de test créées pendant le processus.</p>
+                <div class="actions">
+                    <button data-step="cleanup">Exécuter</button>
+                </div>
+                <div id="stepCleanup-result"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="section-toggle" id="resultsToggle">
+            <h2>Résultats des tests</h2>
+            <span>▼</span>
+        </div>
+        <div id="resultsSection">
+            <div id="testResults" class="result">
+                <p>Les résultats des tests s'afficheront ici après exécution.</p>
+            </div>
+            
+            <h3>Résumé des tables Supabase</h3>
+            <table id="databaseSummary">
+                <thead>
+                    <tr>
+                        <th>Table</th>
+                        <th>Enregistrements</th>
+                        <th>Statut</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>auth.users</td>
+                        <td id="users-count">-</td>
+                        <td id="users-status">Non testé</td>
+                    </tr>
+                    <tr>
+                        <td>user_progress</td>
+                        <td id="progress-count">-</td>
+                        <td id="progress-status">Non testé</td>
+                    </tr>
+                    <tr>
+                        <td>onboarding_responses</td>
+                        <td id="onboarding-count">-</td>
+                        <td id="onboarding-status">Non testé</td>
+                    </tr>
+                    <tr>
+                        <td>user_responses</td>
+                        <td id="responses-count">-</td>
+                        <td id="responses-status">Non testé</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Chargement des librairies -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.6/dist/umd/supabase.min.js"></script>
+    
+    <script>
+        // Configuration Supabase
+        const supabaseUrl = 'https://mgegwthaogszzgflwery.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1nZWd3dGhhb2dzenpnZmx3ZXJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxMjUyMjIsImV4cCI6MjA1OTcwMTIyMn0.ojqRmmC1O4sFTJDydtdSQ15J5ywMyCNBAkMYAkqYQxM';
+        const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        
+        // État global du test
+        const testState = {
+            userId: null,
+            email: null,
+            password: 'Test@123456',
+            step: 0,
+            cleanup: false,
+            results: {}
+        };
+        
+        // Fonction pour ajouter des entrées au journal
+        function log(message, type = 'info') {
+            const logOutput = document.getElementById('logOutput');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            
+            logOutput.appendChild(entry);
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+        
+        // Fonction pour afficher le résultat d'une étape
+        function showStepResult(step, success, message, data = null) {
+            const resultElement = document.getElementById(`step${step}-result`);
+            const stepElement = document.getElementById(`step${step}`);
+            
+            stepElement.className = success ? 'step step-success' : 'step step-error';
+            
+            let resultHTML = `<div class="${success ? 'success' : 'error'}">${message}</div>`;
+            
+            if (data) {
+                resultHTML += `<div class="result">${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}</div>`;
+            }
+            
+            resultElement.innerHTML = resultHTML;
+        }
+        
+        // Fonction pour mettre à jour le résumé des tables
+        async function updateDatabaseSummary(userId) {
+            if (!userId) return;
+            
+            try {
+                // Vérifier l'utilisateur
+                const { data: { user }, error: userError } = await supabase.auth.getUser();
+                document.getElementById('users-count').textContent = user ? '1' : '0';
+                document.getElementById('users-status').textContent = user ? 'OK' : 'Non trouvé';
+                
+                // Vérifier user_progress
+                const { data: progressData, error: progressError } = await supabase
+                    .from('user_progress')
+                    .select('*')
+                    .eq('user_id', userId);
+                    
+                document.getElementById('progress-count').textContent = progressData?.length || '0';
+                document.getElementById('progress-status').textContent = 
+                    progressError ? 'Erreur' : (progressData?.length ? 'OK' : 'Vide');
+                
+                // Vérifier onboarding_responses
+                const { data: onboardingData, error: onboardingError } = await supabase
+                    .from('onboarding_responses')
+                    .select('*')
+                    .eq('user_id', userId);
+                    
+                document.getElementById('onboarding-count').textContent = onboardingData?.length || '0';
+                document.getElementById('onboarding-status').textContent = 
+                    onboardingError ? (onboardingError.code === 'PGRST116' ? 'Table inexistante' : 'Erreur') : 
+                    (onboardingData?.length ? 'OK' : 'Vide');
+                
+                // Vérifier user_responses
+                const { data: responsesData, error: responsesError } = await supabase
+                    .from('user_responses')
+                    .select('*')
+                    .eq('user_id', userId);
+                    
+                document.getElementById('responses-count').textContent = responsesData?.length || '0';
+                document.getElementById('responses-status').textContent = 
+                    responsesError ? (responsesError.code === 'PGRST116' ? 'Table inexistante' : 'Erreur') : 
+                    (responsesData?.length ? 'OK' : 'Vide');
+                
+            } catch (error) {
+                console.error('Erreur lors de la mise à jour du résumé:', error);
+            }
+        }
+        
+        // Fonctions pour les étapes individuelles
+        async function step1_signup() {
+            try {
+                log('Étape 1: Inscription d\'un nouvel utilisateur');
+                
+                // Générer un email unique pour le test
+                testState.email = `test_${Date.now()}@example.com`;
+                document.getElementById('testEmail').value = testState.email;
+                
+                // Inscrire l'utilisateur
+                const { data, error } = await supabase.auth.signUp({
+                    email: testState.email,
+                    password: testState.password,
+                    options: {
+                        data: {
+                            first_name: 'Test',
+                            last_name: 'Utilisateur',
+                            status: 'Test'
+                        }
+                    }
+                });
+                
+                if (error) throw error;
+                
+                testState.userId = data.user.id;
+                log(`Utilisateur créé avec succès: ${testState.userId}`, 'success');
+                
+                showStepResult(1, true, 'Inscription réussie!', {
+                    userId: testState.userId,
+                    email: testState.email
+                });
+                
+                testState.results.signup = {
+                    success: true,
+                    userId: testState.userId,
+                    email: testState.email
+                };
+                
+                return true;
+            } catch (error) {
+                log(`Erreur lors de l'inscription: ${error.message}`, 'error');
+                showStepResult(1, false, `Erreur lors de l'inscription: ${error.message}`, error);
+                
+                testState.results.signup = {
+                    success: false,
+                    error: error.message
+                };
+                
+                return false;
+            }
+        }
+        
+        async function step2_signin() {
+            try {
+                log('Étape 2: Connexion avec le nouvel utilisateur');
+                
+                // Se connecter avec l'utilisateur créé
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: testState.email,
+                    password: testState.password
+                });
+                
+                if (error) throw error;
+                
+                log(`Connexion réussie pour ${testState.email}`, 'success');
+                showStepResult(2, true, 'Connexion réussie!', {
+                    userId: data.user.id,
+                    session: !!data.session
+                });
+                
+                testState.results.signin = {
+                    success: true,
+                    userId: data.user.id
+                };
+                
+                return true;
+            } catch (error) {
+                log(`Erreur lors de la connexion: ${error.message}`, 'error');
+                showStepResult(2, false, `Erreur lors de la connexion: ${error.message}`, error);
+                
+                testState.results.signin = {
+                    success: false,
+                    error: error.message
+                };
+                
+                return false;
+            }
+        }
+        
+        async function step3_saveOnboarding() {
+            try {
+                log('Étape 3: Enregistrement des données d\'onboarding');
+                
+                // Créer les réponses d'onboarding
+                const onboardingResponses = {
+                    q1: 'Stress et anxiété',
+                    q2: ['Méditation', 'Respiration'],
+                    q3: 7,
+                    q4: 'Mieux dormir',
+                    q5_custom: {
+                        'Autre objectif': 'Améliorer ma concentration'
+                    },
+                    completedAt: new Date().toISOString()
+                };
+                
+                // Vérifier si l'utilisateur est connecté
+                const { data: { user } } = await supabase.auth.getUser();
+                
+                if (!user) {
+                    throw new Error('Aucun utilisateur connecté');
+                }
+                
+                // Sauvegarder dans la table onboarding_responses
+                try {
+                    const { error } = await supabase
+                        .from('onboarding_responses')
+                        .upsert({
+                            user_id: user.id,
+                            responses: onboardingResponses,
+                            updated_at: new Date()
+                        });
+                        
+                    if (error) {
+                        if (error.code === 'PGRST116' || error.message.includes("relation") || error.message.includes("does not exist")) {
+                            log('Table onboarding_responses non disponible, tentative avec user_responses', 'warning');
+                            throw new Error('table_not_found');
+                        }
+                        throw error;
+                    }
+                    
+                    log('Données d\'onboarding enregistrées avec succès (table dédiée)', 'success');
+                } catch (err) {
+                    // Si la table spécifique n'existe pas, tenter la table générique
+                    if (err.message === 'table_not_found') {
+                        const { error: userResponsesError } = await supabase
+                            .from('user_responses')
+                            .upsert({
+                                user_id: user.id,
+                                module_id: 'onboarding',
+                                responses: onboardingResponses,
+                                created_at: new Date()
+                            });
+                            
+                        if (userResponsesError) {
+                            throw userResponsesError;
+                        }
+                        
+                        log('Données d\'onboarding enregistrées avec succès (table user_responses)', 'success');
+                    } else {
+                        throw err;
+                    }
+                }
+                
+                // Mise à jour de user_progress pour compatibilité
+                try {
+                    // D'abord vérifier si une entrée existe
+                    const { data: existingProgress } = await supabase
+                        .from('user_progress')
+                        .select('*')
+                        .eq('user_id', user.id)
+                        .single();
+                    
+                    // Structure de base pour les données de progression
+                    let progress_data = {
+                        userId: user.id,
+                        totalPoints: 0,
+                        streak: 0,
+                        wellnessScore: 65,
+                        completedModules: {},
+                        completedChallenges: [],
+                        badges: [],
+                        moduleResponses: {
+                            onboarding: {
+                                responses: onboardingResponses,
+                                completedAt: new Date().toISOString()
+                            }
+                        },
+                        islandProgress: {
+                            mindfulness: { progress: 0, completedModules: 0 },
+                            productivity: { progress: 0, completedModules: 0 },
+                            stress: { progress: 0, completedModules: 0 },
+                            balance: { progress: 0, completedModules: 0 }
+                        }
+                    };
+                    
+                    // Si des données existent déjà, les fusionner
+                    if (existingProgress) {
+                        try {
+                            const existingData = typeof existingProgress.progress_data === 'string' 
+                                ? JSON.parse(existingProgress.progress_data) 
+                                : existingProgress.progress_data;
+                                
+                            // Fusionner avec les données existantes, en gardant les nouvelles réponses d'onboarding
+                            progress_data = {
+                                ...existingData,
+                                moduleResponses: {
+                                    ...existingData.moduleResponses,
+                                    onboarding: {
+                                        responses: onboardingResponses,
+                                        completedAt: new Date().toISOString()
+                                    }
+                                }
+                            };
+                        } catch (e) {
+                            console.warn('Erreur lors du parsing des données existantes:', e);
+                        }
+                    }
+                    
+                    // Sauvegarder dans user_progress
+                    const { error: progressError } = await supabase
+                        .from('user_progress')
+                        .upsert({
+                            user_id: user.id,
+                            progress_data: JSON.stringify(progress_data),
+                            updated_at: new Date()
+                        });
+                        
+                    if (progressError) {
+                        throw progressError;
+                    }
+                    
+                    log('Progression utilisateur mise à jour avec les données d\'onboarding', 'success');
+                } catch (progressErr) {
+                    log(`Avertissement: Impossible de mettre à jour user_progress: ${progressErr.message}`, 'warning');
+                }
+                
+                showStepResult(3, true, 'Données d\'onboarding enregistrées avec succès', onboardingResponses);
+                
+                testState.results.onboarding = {
+                    success: true,
+                    responses: onboardingResponses
+                };
+                
+                return true;
+            } catch (error) {
+                log(`Erreur lors de l'enregistrement des données d'onboarding: ${error.message}`, 'error');
+                showStepResult(3, false, `Erreur: ${error.message}`, error);
+                
+                testState.results.onboarding = {
+                    success: false,
+                    error: error.message
+                };
+                
+                return false;
+            }
+        }
+        
+        async function step4_verifyOnboarding() {
+            try {
+                log('Étape 4: Vérification des données d\'onboarding');
+                
+                let onboardingData = null;
+                let onboardingSource = "";
+                
+                // Vérifier dans la table dédiée onboarding_responses
+                try {
+                    const { data: dedicatedData, error: dedicatedError } = await supabase
+                        .from('onboarding_responses')
+                        .select('*')
+                        .eq('user_id', testState.userId)
+                        .single();
+                        
+                    if (dedicatedData) {
+                        onboardingData = dedicatedData;
+                        onboardingSource = "Table onboarding_responses";
+                        log('Données trouvées dans la table dédiée onboarding_responses', 'success');
+                    } else if (dedicatedError && dedicatedError.code !== 'PGRST116') {
+                        log(`Erreur lors de la recherche dans onboarding_responses: ${dedicatedError.message}`, 'warning');
+                    }
+                } catch (err) {
+                    log(`Exception lors de la recherche dans onboarding_responses: ${err.message}`, 'warning');
+                }
+                
+                // Si non trouvé, vérifier dans user_responses
+                if (!onboardingData) {
+                    try {
+                        const { data: standardData, error: standardError } = await supabase
+                            .from('user_responses')
+                            .select('*')
+                            .eq('user_id', testState.userId)
+                            .eq('module_id', 'onboarding')
+                            .single();
+                            
+                        if (standardData) {
+                            onboardingData = standardData;
+                            onboardingSource = "Table user_responses";
+                            log('Données trouvées dans la table user_responses', 'success');
+                        } else if (standardError && standardError.code !== 'PGRST116') {
+                            log(`Erreur lors de la recherche dans user_responses: ${standardError.message}`, 'warning');
+                        }
+                    } catch (err) {
+                        log(`Exception lors de la recherche dans user_responses: ${err.message}`, 'warning');
+                    }
+                }
+                
+                // Si toujours non trouvé, vérifier dans progress_data
+                if (!onboardingData) {
+                    try {
+                        const { data: progressData, error: progressError } = await supabase
+                            .from('user_progress')
+                            .select('progress_data')
+                            .eq('user_id', testState.userId)
+                            .single();
+                            
+                        if (progressData?.progress_data) {
+                            const parsedData = typeof progressData.progress_data === 'string' 
+                                ? JSON.parse(progressData.progress_data) 
+                                : progressData.progress_data;
+                                
+                            if (parsedData.moduleResponses?.onboarding) {
+                                onboardingData = { 
+                                    embedded: true, 
+                                    responses: parsedData.moduleResponses.onboarding 
+                                };
+                                onboardingSource = "Dans progress_data (user_progress)";
+                                log('Données trouvées dans le champ progress_data de user_progress', 'success');
+                            }
+                        }
+                    } catch (err) {
+                        log(`Exception lors de la recherche dans progress_data: ${err.message}`, 'warning');
+                    }
+                }
+                
+                if (onboardingData) {
+                    showStepResult(4, true, `Données trouvées dans: ${onboardingSource}`, onboardingData);
+                    
+                    testState.results.verifyOnboarding = {
+                        success: true,
+                        source: onboardingSource,
+                        data: onboardingData
+                    };
+                    
+                    return true;
+                } else {
+                    throw new Error('Données d\'onboarding non trouvées dans aucune table');
+                }
+            } catch (error) {
+                log(`Erreur lors de la vérification des données d'onboarding: ${error.message}`, 'error');
+                showStepResult(4, false, `Erreur: ${error.message}`, error);
+                
+                testState.results.verifyOnboarding = {
+                    success: false,
+                    error: error.message
+                };
+                
+                return false;
+            }
+        }
+        
+        async function step5_createProgress() {
+            try {
+                log('Étape 5: Création et sauvegarde de progression utilisateur');
+                
+                // Vérifier si l'utilisateur est connecté
+                const { data: { user } } = await supabase.auth.getUser();
+                
+                if (!user) {
+                    throw new Error('Aucun utilisateur connecté');
+                }
+                
+                // Créer des données de progression
+                const progress_data = {
+                    userId: user.id,
+                    totalPoints: 100,
+                    streak: 1,
+                    wellnessScore: 70,
+                    completedModules: {
+                        'mindfulness_1': true
+                    },
+                    completedChallenges: ['daily_meditation_1'],
+                    badges: [{
+                        id: 'mindfulness_beginner',
+                        name: 'Découvreur de mindfulness',
+                        description: 'Premier module de l\'île mindfulness complété',
+                        icon: '🌱'
+                    }],
+                    islandProgress: {
+                        mindfulness: { progress: 25, completedModules: 1 },
+                        productivity: { progress: 0, completedModules: 0 },
+                        stress: { progress: 0, completedModules: 0 },
+                        balance: { progress: 0, completedModules: 0 }
+                    }
+                };
+                
+                // Sauvegarder dans user_progress
+                const { error } = await supabase
+                    .from('user_progress')
+                    .upsert({
+                        user_id: user.id,
+                        progress_data: JSON.stringify(progress_data),
+                        updated_at: new Date()
+                    });
+                    
+                if (error) throw error;
+                
+                log('Progression utilisateur créée et sauvegardée avec succès', 'success');
+                showStepResult(5, true, 'Progression créée avec succès', {
+                    points: progress_data.totalPoints,
+                    modules: Object.keys(progress_data.completedModules),
+                    badges: progress_data.badges.length
+                });
+                
+                testState.results.createProgress = {
+                    success: true,
+                    progress_data: progress_data
+                };
+                
+                return true;
+            } catch (error) {
+                log(`Erreur lors de la création de progression: ${error.message}`, 'error');
+                showStepResult(5, false, `Erreur: ${error.message}`, error);
+                
+                testState.results.createProgress = {
+                    success: false,
+                    error: error.message
+                };
+                
+                return false;
+            }
+        }
+        
+        async function step6_verifyProgress() {
+            try {
+                log('Étape 6: Vérification des données de progression');
+                
+                // Récupérer les données de progression
+                const { data, error } = await supabase
+                    .from('user_progress')
+                    .select('*')
+                    .eq('user_id', testState.userId)
+                    .single();
+                    
+                if (error) throw error;
+                
+                if (!data) {
+                    throw new Error('Aucune donnée de progression trouvée');
+                }
+                
+                // Vérifier que les données sont correctes
+                let parsedProgress;
+                try {
+                    parsedProgress = typeof data.progress_data === 'string' 
+                        ? JSON.parse(data.progress_data) 
+                        : data.progress_data;
+                } catch (e) {
+                    throw new Error(`Erreur lors du parsing des données: ${e.message}`);
+                }
+                
+                const validPoints = parsedProgress.totalPoints === 100;
+                const validModule = parsedProgress.completedModules?.mindfulness_1 === true;
+                const validBadge = parsedProgress.badges?.some(b => b.id === 'mindfulness_beginner');
+                
+                if (!validPoints || !validModule) {
+                    throw new Error('Les données de progression ne correspondent pas aux valeurs attendues');
+                }
+                
+                log('Données de progression vérifiées avec succès', 'success');
+                showStepResult(6, true, 'Données de progression valides', {
+                    id: data.id,
+                    pointsMatch: validPoints,
+                    moduleMatch: validModule,
+                    badgeMatch: validBadge
+                });
+                
+                testState.results.verifyProgress = {
+                    success: true,
+                    data: {
+                        id: data.id,
+                        validPoints,
+                        validModule,
+                        validBadge
+                    }
+                };
+                
+                return true;
+            } catch (error) {
+                log(`Erreur lors de la vérification de progression: ${error.message}`, 'error');
+                showStepResult(6, false, `Erreur: ${error.message}`, error);
+                
+                testState.results.verifyProgress = {
+                    success: false,
+                    error: error.message
+                };
+                
+                return false;
+            }
+        }
+        
+        async function step7_saveModuleResponses() {
+            try {
+                log('Étape 7: Enregistrement des réponses de module');
+                
+                // Vérifier si l'utilisateur est connecté
+                const { data: { user } } = await supabase.auth.getUser();
+                
+                if (!user) {
+                    throw new Error('Aucun utilisateur connecté');
+                }
+                
+                // Créer des réponses de module
+                const moduleId = 'mindfulness_1';
+                const moduleResponses = {
+                    q1: 'Très bien',
+                    q2: 8,
+                    q3: ['Option 1', 'Option 3'],
+                    feedback: 'Module très utile',
+                    completedAt: new Date().toISOString()
+                };
+                
+                // Sauvegarder dans user_responses
+                try {
+                    const { error } = await supabase
+                        .from('user_responses')
+                        .upsert({
+                            user_id: user.id,
+                            module_id: moduleId,
+                            responses: moduleResponses,
+                            created_at: new Date()
+                        });
+                        
+                    if (error) {
+                        if (error.code === 'PGRST116' || error.message.includes("relation") || error.message.includes("does not exist")) {
+                            log('Table user_responses non disponible, sauvegarde uniquement dans user_progress', 'warning');
+                        } else {
+                            throw error;
+                        }
+                    } else {
+                        log('Réponses de module enregistrées avec succès dans user_responses', 'success');
+                    }
+                } catch (err) {
+                    log(`Erreur: ${err.message}`, 'warning');
+                }
+                
+                // Mettre à jour également dans user_progress
+                try {
+                    // Récupérer les données actuelles
+                    const { data: progressData, error: progressError } = await supabase
+                        .from('user_progress')
+                        .select('progress_data')
+                        .eq('user_id', user.id)
+                        .single();
+                        
+                    if (progressError) throw progressError;
+                    
+                    let updatedProgressData;
+                    
+                    if (progressData) {
+                        // Mettre à jour les données existantes
+                        const parsedData = typeof progressData.progress_data === 'string' 
+                            ? JSON.parse(progressData.progress_data) 
+                            : progressData.progress_data;
+                            
+                        // Ajouter les réponses du module
+                        parsedData.moduleResponses = parsedData.moduleResponses || {};
+                        parsedData.moduleResponses[moduleId] = {
+                            responses: moduleResponses,
+                            completedAt: new Date().toISOString()
+                        };
+                        
+                        updatedProgressData = parsedData;
+                    } else {
+                        // Créer de nouvelles données
+                        updatedProgressData = {
+                            userId: user.id,
+                            totalPoints: 0,
+                            streak: 0,
+                            wellnessScore: 65,
+                            completedModules: {},
+                            completedChallenges: [],
+                            badges: [],
+                            moduleResponses: {
+                                [moduleId]: {
+                                    responses: moduleResponses,
+                                    completedAt: new Date().toISOString()
+                                }
+                            },
+                            islandProgress: {
+                                mindfulness: { progress: 0, completedModules: 0 },
+                                productivity: { progress: 0, completedModules: 0 },
+                                stress: { progress: 0, completedModules: 0 },
+                                balance: { progress: 0, completedModules: 0 }
+                            }
+                        };
+                    }
+                    
+                    // Sauvegarder les données mises à jour
+                    const { error: saveError } = await supabase
+                        .from('user_progress')
+                        .upsert({
+                            user_id: user.id,
+                            progress_data: JSON.stringify(updatedProgressData),
+                            updated_at: new Date()
+                        });
+                        
+                    if (saveError) throw saveError;
+                    
+                    log('Réponses de module mises à jour dans user_progress', 'success');
+                } catch (e) {
+                    log(`Erreur lors de la mise à jour dans user_progress: ${e.message}`, 'error');
+                    throw e;
+                }
+                
+                showStepResult(7, true, 'Réponses de module enregistrées avec succès', {
+                    moduleId,
+                    responses: moduleResponses
+                });
+                
+                testState.results.saveModuleResponses = {
+                    success: true,
+                    moduleId,
+                    responses: moduleResponses
+                };
+                
+                return true;
+            } catch (error) {
+                log(`Erreur lors de l'enregistrement des réponses: ${error.message}`, 'error');
+                showStepResult(7, false, `Erreur: ${error.message}`, error);
+                
+                testState.results.saveModuleResponses = {
+                    success: false,
+                    error: error.message
+                };
+                
+                return false;
+            }
+        }
+        
+        async function step8_verifyModuleResponses() {
+            try {
+                log('Étape 8: Vérification des réponses de module');
+                
+                const moduleId = 'mindfulness_1';
+                let moduleData = null;
+                let moduleSource = "";
+                
+                // Vérifier dans user_responses
+                try {
+                    const { data, error } = await supabase
+                        .from('user_responses')
+                        .select('*')
+                        .eq('user_id', testState.userId)
+                        .eq('module_id', moduleId);
+                        
+                    if (data && data.length > 0) {
+                        moduleData = data[0];
+                        moduleSource = "Table user_responses";
+                        log('Réponses trouvées dans la table user_responses', 'success');
+                    } else if (error && error.code !== 'PGRST116') {
+                        log(`Erreur lors de la recherche dans user_responses: ${error.message}`, 'warning');
+                    }
+                } catch (err) {
+                    log(`Exception lors de la recherche dans user_responses: ${err.message}`, 'warning');
+                }
+                
+                // Si non trouvé, vérifier dans progress_data
+                if (!moduleData) {
+                    try {
+                        const { data, error } = await supabase
+                            .from('user_progress')
+                            .select('progress_data')
+                            .eq('user_id', testState.userId)
+                            .single();
+                            
+                        if (data?.progress_data) {
+                            const parsedData = typeof data.progress_data === 'string' 
+                                ? JSON.parse(data.progress_data) 
+                                : data.progress_data;
+                                
+                            if (parsedData.moduleResponses?.[moduleId]) {
+                                moduleData = { 
+                                    embedded: true, 
+                                    responses: parsedData.moduleResponses[moduleId] 
+                                };
+                                moduleSource = "Dans progress_data (user_progress)";
+                                log('Réponses trouvées dans le champ progress_data de user_progress', 'success');
+                            }
+                        }
+                    } catch (err) {
+                        log(`Exception lors de la recherche dans progress_data: ${err.message}`, 'warning');
+                    }
+                }
+                
+                if (moduleData) {
+                    showStepResult(8, true, `Réponses trouvées dans: ${moduleSource}`, moduleData);
+                    
+                    testState.results.verifyModuleResponses = {
+                        success: true,
+                        source: moduleSource,
+                        data: moduleData
+                    };
+                    
+                    return true;
+                } else {
+                    throw new Error('Réponses de module non trouvées');
+                }
+            } catch (error) {
+                log(`Erreur lors de la vérification des réponses: ${error.message}`, 'error');
+                showStepResult(8, false, `Erreur: ${error.message}`, error);
+                
+                testState.results.verifyModuleResponses = {
+                    success: false,
+                    error: error.message
+                };
+                
+                return false;
+            }
+        }
+        
+        async function step9_signout() {
+            try {
+                log('Étape 9: Déconnexion');
+                
+                const { error } = await supabase.auth.signOut();
+                
+                if (error) throw error;
+                
+                log('Déconnexion réussie', 'success');
+                showStepResult(9, true, 'Déconnexion réussie');
+                
+                testState.results.signout = {
+                    success: true
+                };
+                
+                return true;
+            } catch (error) {
+                log(`Erreur lors de la déconnexion: ${error.message}`, 'error');
+                showStepResult(9, false, `Erreur: ${error.message}`, error);
+                
+                testState.results.signout = {
+                    success: false,
+                    error: error.message
+                };
+                
+                return false;
+            }
+        }
+        
+        async function stepCleanup() {
+            try {
+                log('Nettoyage des données de test');
+                
+                if (!testState.userId) {
+                    throw new Error('Aucun ID utilisateur à nettoyer');
+                }
+                
+                // Supprimer les données de test en parallèle
+                const tables = ['user_progress', 'onboarding_responses', 'user_responses', 'user_recommendations'];
+                
+                for (const table of tables) {
+                    try {
+                        const { error } = await supabase
+                            .from(table)
+                            .delete()
+                            .eq('user_id', testState.userId);
+                            
+                        if (error && error.code !== 'PGRST116') {
+                            log(`Avertissement: Impossible de nettoyer ${table}: ${error.message}`, 'warning');
+                        } else {
+                            log(`Table ${table} nettoyée`, 'success');
+                        }
+                    } catch (err) {
+                        log(`Exception lors du nettoyage de ${table}: ${err.message}`, 'warning');
+                    }
+                }
+                
+                // Note: On ne peut pas supprimer l'utilisateur sans admin access
+                // Mais on peut le signaler
+                log('Utilisateur de test maintenu (suppression nécessite un accès admin)', 'warning');
+                
+                showStepResult('Cleanup', true, 'Nettoyage des données effectué', {
+                    userId: testState.userId,
+                    tables: tables
+                });
+                
+                testState.results.cleanup = {
+                    success: true
+                };
+                
+                return true;
+            } catch (error) {
+                log(`Erreur lors du nettoyage: ${error.message}`, 'error');
+                showStepResult('Cleanup', false, `Erreur: ${error.message}`, error);
+                
+                testState.results.cleanup = {
+                    success: false,
+                    error: error.message
+                };
+                
+                return false;
+            }
+        }
+        
+        // Fonction pour exécuter le test complet
+        async function runFullTest() {
+            log('Démarrage du test complet');
+            document.getElementById('testResults').innerHTML = '<p>Test en cours...</p>';
+            
+            // Récupérer l'option de nettoyage
+            testState.cleanup = document.getElementById('cleanupData').value === 'yes';
+            
+            // Étape 1: Inscription
+            await step1_signup();
+            
+            // Étape 2: Connexion
+            const signinSuccess = await step2_signin();
+            if (!signinSuccess) {
+                document.getElementById('testResults').innerHTML = `
+                    <div class="error">
+                        <h3>Échec du test</h3>
+                        <p>Échec à l'étape de connexion. Impossible de continuer.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Étape 3: Enregistrement des données d'onboarding
+            await step3_saveOnboarding();
+            
+            // Étape 4: Vérification des données d'onboarding
+            await step4_verifyOnboarding();
+            
+            // Étape 5: Création de progression utilisateur
+            await step5_createProgress();
+            
+            // Étape 6: Vérification des données de progression
+            await step6_verifyProgress();
+            
+            // Étape 7: Enregistrement de réponses de module
+            await step7_saveModuleResponses();
+            
+            // Étape 8: Vérification des réponses de module
+            await step8_verifyModuleResponses();
+            
+            // Étape 9: Déconnexion
+            await step9_signout();
+            
+            // Nettoyage si demandé
+            if (testState.cleanup) {
+                await stepCleanup();
+            }
+            
+            // Mise à jour du résumé des tables
+            await updateDatabaseSummary(testState.userId);
+            
+            // Afficher le résumé des tests
+            const successCount = Object.values(testState.results).filter(r => r.success).length;
+            const totalSteps = Object.keys(testState.results).length;
+            
+            document.getElementById('testResults').innerHTML = `
+                <h3>Résumé du test</h3>
+                <p>${successCount} étapes sur ${totalSteps} réussies</p>
+                <ul>
+                    ${Object.entries(testState.results).map(([step, result]) => `
+                        <li>
+                            ${result.success ? '✅' : '❌'} 
+                            <strong>${step}:</strong> 
+                            ${result.success ? 'Succès' : `Échec - ${result.error}`}
+                        </li>
+                    `).join('')}
+                </ul>
+                <h3>Informations</h3>
+                <p><strong>Email utilisé:</strong> ${testState.email}</p>
+                <p><strong>ID utilisateur:</strong> ${testState.userId}</p>
+                <p><strong>Données nettoyées:</strong> ${testState.cleanup ? 'Oui' : 'Non'}</p>
+            `;
+            
+            log('Test complet terminé', 'success');
+        }
+        
+        // Fonction pour exécuter une étape spécifique
+        async function runStep(stepNumber) {
+            const stepMap = {
+                '1': step1_signup,
+                '2': step2_signin,
+                '3': step3_saveOnboarding,
+                '4': step4_verifyOnboarding,
+                '5': step5_createProgress,
+                '6': step6_verifyProgress,
+                '7': step7_saveModuleResponses,
+                '8': step8_verifyModuleResponses,
+                '9': step9_signout,
+                'cleanup': stepCleanup
+            };
+            
+            if (!stepMap[stepNumber]) {
+                log(`Étape ${stepNumber} non reconnue`, 'error');
+                return;
+            }
+            
+            // Marquer l'étape comme en cours
+            const stepElement = document.getElementById(`step${stepNumber}`);
+            stepElement.className = 'step step-pending';
+            
+            // Exécuter l'étape
+            await stepMap[stepNumber]();
+            
+            // Mise à jour du résumé des tables si l'utilisateur est défini
+            if (testState.userId) {
+                await updateDatabaseSummary(testState.userId);
+            }
+        }
+        
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            // Générer un email de test
+            const testEmail = `test_${Date.now()}@example.com`;
+            document.getElementById('testEmail').value = testEmail;
+            
+            // Bouton pour lancer le test complet
+            document.getElementById('startTestButton').addEventListener('click', runFullTest);
+            
+            // Bouton pour le mode pas à pas
+            document.getElementById('stepByStepButton').addEventListener('click', function() {
+                const container = document.getElementById('stepByStepContainer');
+                container.classList.toggle('hidden');
+                this.textContent = container.classList.contains('hidden') ? 'Mode pas à pas' : 'Masquer mode pas à pas';
+            });
+            
+            // Attacher les gestionnaires d'événements pour les étapes individuelles
+            document.querySelectorAll('[data-step]').forEach(button => {
+                button.addEventListener('click', function() {
+                    runStep(this.getAttribute('data-step'));
+                });
+            });
+            
+            // Configurer les toggles de section
+            document.getElementById('logToggle').addEventListener('click', function() {
+                const section = document.getElementById('logSection');
+                section.classList.toggle('hidden');
+                this.querySelector('span').textContent = section.classList.contains('hidden') ? '▶' : '▼';
+            });
+            
+            document.getElementById('resultsToggle').addEventListener('click', function() {
+                const section = document.getElementById('resultsSection');
+                section.classList.toggle('hidden');
+                this.querySelector('span').textContent = section.classList.contains('hidden') ? '▶' : '▼';
+            });
+        });
+    </script>
+</body>
+</html>

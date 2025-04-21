@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test de Flux Utilisateur Complet - IKIGAI</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #4a6fa5;
+      border-bottom: 2px solid #4a6fa5;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #5d8aa8;
+      margin-top: 30px;
+    }
+    .card {
+      background-color: #f9f9f9;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button {
+      background-color: #4a6fa5;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      background-color: #3a5a80;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 14px;
+    }
+    .success {
+      color: #2e7d32;
+      font-weight: bold;
+    }
+    .error {
+      color: #c62828;
+      font-weight: bold;
+    }
+    .info {
+      color: #1565c0;
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .status-online {
+      background-color: #4caf50;
+    }
+    .status-offline {
+      background-color: #f44336;
+    }
+    .log-container {
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid #eee;
+      padding: 10px;
+      background-color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <h1>Test de Flux Utilisateur Complet - IKIGAI</h1>
+
+  <div class="card">
+    <h2>Contrôle du Flux</h2>
+    <p>
+      Statut: <span id="connection-status"><span class="status-indicator status-offline"></span>Non connecté</span>
+    </p>
+    <button id="run-flow-btn">Lancer le Flux Utilisateur Complet</button>
+    <button id="login-btn">Se connecter (OAuth)</button>
+    <button id="logout-btn" disabled>Se déconnecter</button>
+    <button id="reset-btn">Réinitialiser les données locales</button>
+  </div>
+
+  <div class="card">
+    <h2>Journal d'exécution du Flux</h2>
+    <div class="log-container" id="log"></div>
+  </div>
+
+  <!-- Chargement des scripts -->
+  <script type="module">
+    import { supabase } from '../../src/shared/supabase.js';
+    import StorageService from '../services/StorageService.js';
+
+    const logContainer = document.getElementById('log');
+    const runFlowBtn = document.getElementById('run-flow-btn');
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    const connectionStatusElement = document.getElementById('connection-status');
+
+    // Fonction pour ajouter un message au journal
+    function log(message, type = 'info') {
+      const logEntry = document.createElement('div');
+      logEntry.className = type;
+      logEntry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logContainer.prepend(logEntry);
+      console[type === 'error' ? 'error' : 'log'](message);
+    }
+
+    // Fonction pour mettre à jour le statut de connexion UI
+    async function updateConnectionStatusUI() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          connectionStatusElement.innerHTML = `<span class="status-indicator status-online"></span>Connecté (${user.email})`;
+          loginBtn.disabled = true;
+          logoutBtn.disabled = false;
+          runFlowBtn.disabled = false;
+        } else {
+          connectionStatusElement.innerHTML = `<span class="status-indicator status-offline"></span>Non connecté`;
+          loginBtn.disabled = false;
+          logoutBtn.disabled = true;
+          runFlowBtn.disabled = true; // Désactiver si non connecté
+        }
+      } catch (error) {
+        connectionStatusElement.innerHTML = `<span class="status-indicator status-offline"></span>Erreur de connexion`;
+        log(`Erreur lors de la vérification du statut: ${error.message}`, 'error');
+        loginBtn.disabled = false;
+        logoutBtn.disabled = true;
+        runFlowBtn.disabled = true;
+      }
+    }
+
+    // --- Étapes du Flux Utilisateur ---
+
+    async function stepLogin() {
+      log('Étape 1: Connexion Utilisateur');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        log('Utilisateur déjà connecté.', 'success');
+        return true;
+      }
+
+      log('Aucun utilisateur connecté. Redirection vers Google OAuth...');
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.href
+        }
+      });
+      if (error) {
+        log(`Erreur lors de la redirection OAuth: ${error.message}`, 'error');
+        return false;
+      }
+      // La page va recharger après la redirection, le flux reprendra si connecté
+      return false; // Indique que le flux ne continue pas immédiatement
+    }
+
+    async function stepOnboarding() {
+      log('Étape 2: Enregistrement des réponses d\'onboarding');
+      try {
+        const onboardingData = {
+          name: `TestUser_${Date.now()}`,
+          age: Math.floor(Math.random() * 50) + 20,
+          goals: ['Test Goal 1', 'Test Goal 2'],
+          preferences: { theme: 'dark' }
+        };
+        await StorageService.saveModuleResponses('onboarding', onboardingData);
+        log('Réponses d\'onboarding enregistrées avec succès.', 'success');
+        return true;
+      } catch (error) {
+        log(`Erreur lors de l'enregistrement de l'onboarding: ${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    async function stepModuleResponse() {
+      log('Étape 3: Enregistrement des réponses d\'un module');
+      try {
+        const moduleId = 'test_module_1';
+        const moduleData = {
+          q1: 'Réponse test 1',
+          q2: `Réponse aléatoire ${Math.random()}`,
+          completed: true
+        };
+        await StorageService.saveModuleResponses(moduleId, moduleData);
+        log(`Réponses du module '${moduleId}' enregistrées avec succès.`, 'success');
+        return true;
+      } catch (error) {
+        log(`Erreur lors de l'enregistrement des réponses du module: ${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    async function stepSync() {
+        log('Étape 4: Synchronisation des données');
+        try {
+            const pendingCount = (JSON.parse(localStorage.getItem('pending_user_responses') || '[]')).length;
+            if (pendingCount > 0) {
+                log(`Synchronisation de ${pendingCount} réponse(s) en attente...`);
+                await StorageService.syncPendingResponses();
+                log('Synchronisation terminée avec succès.', 'success');
+            } else {
+                log('Aucune réponse en attente à synchroniser.', 'info');
+            }
+            return true;
+        } catch (error) {
+            log(`Erreur lors de la synchronisation: ${error.message}`, 'error');
+            return false;
+        }
+    }
+
+    async function stepCheckData() {
+      log('Étape 5: Vérification des données stockées');
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          log('Utilisateur non connecté, impossible de vérifier les données Supabase.', 'error');
+          return false;
+        }
+
+        // Vérifier user_progress
+        const { data: progressData, error: progressError } = await supabase
+          .from('user_progress')
+          .select('progress_data')
+          .eq('user_id', user.id)
+          .single();
+
+        if (progressError && progressError.code !== 'PGRST116') { // PGRST116: No rows found
+            throw new Error(`Erreur user_progress: ${progressError.message}`);
+        }
+        if (progressData) {
+            log('Données user_progress trouvées:', 'success');
+            log(`<pre>${JSON.stringify(JSON.parse(progressData.progress_data), null, 2)}</pre>`);
+        } else {
+            log('Aucune donnée user_progress trouvée.', 'info');
+        }
+
+        // Vérifier user_responses
+        const { data: responseData, error: responseError } = await supabase
+          .from('user_responses')
+          .select('module_id, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (responseError) {
+            throw new Error(`Erreur user_responses: ${responseError.message}`);
+        }
+        if (responseData && responseData.length > 0) {
+            log(`Dernières ${responseData.length} réponses user_responses trouvées:`, 'success');
+            responseData.forEach(r => log(`- Module: ${r.module_id}, Date: ${new Date(r.created_at).toLocaleString()}`));
+        } else {
+            log('Aucune donnée user_responses trouvée.', 'info');
+        }
+        return true;
+      } catch (error) {
+        log(`Erreur lors de la vérification des données: ${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    async function stepLogout() {
+      log('Étape 6: Déconnexion');
+      try {
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+        log('Déconnecté avec succès.', 'success');
+        await updateConnectionStatusUI();
+        return true;
+      } catch (error) {
+        log(`Erreur lors de la déconnexion: ${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    // --- Exécution du Flux ---
+
+    async function runFullUserFlow() {
+      runFlowBtn.disabled = true;
+      log('--- Début du Flux Utilisateur Complet ---', 'info');
+
+      // Vérifier si l'utilisateur est connecté, sinon lancer la connexion
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+          log('Utilisateur non connecté. Veuillez vous connecter d\'abord via le bouton "Se connecter (OAuth)".', 'error');
+          runFlowBtn.disabled = false;
+          return;
+      }
+      log(`Connecté en tant que ${user.email}. Démarrage des étapes...`, 'success');
+
+      let success = true;
+
+      success = await stepOnboarding();
+      if (!success) { log('Flux interrompu à l'étape onboarding.', 'error'); runFlowBtn.disabled = false; return; }
+
+      success = await stepModuleResponse();
+      if (!success) { log('Flux interrompu à l'étape module response.', 'error'); runFlowBtn.disabled = false; return; }
+
+      success = await stepSync();
+      if (!success) { log('Flux interrompu à l\'étape de synchronisation.', 'error'); runFlowBtn.disabled = false; return; }
+
+      success = await stepCheckData();
+      if (!success) { log('Flux interrompu à l\'étape de vérification des données.', 'error'); runFlowBtn.disabled = false; return; }
+
+      // La déconnexion est optionnelle dans le flux automatique, peut être faite manuellement
+      // success = await stepLogout();
+      // if (!success) { log('Erreur lors de la déconnexion finale.', 'error'); }
+
+      log('--- Flux Utilisateur Complet Terminé ---', success ? 'success' : 'error');
+      runFlowBtn.disabled = false;
+    }
+
+    // --- Initialisation et Écouteurs d'Événements ---
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      log('Initialisation de la page de test...');
+      await updateConnectionStatusUI();
+
+      // Gérer la redirection OAuth
+      if (window.location.hash.includes('access_token')) {
+        log('Redirection OAuth détectée, traitement en cours...');
+        // Supabase gère le hash automatiquement, mettons à jour l'UI après un court délai
+        setTimeout(async () => {
+          await updateConnectionStatusUI();
+          log('Statut de connexion mis à jour après OAuth.');
+          // Optionnel: Lancer le flux automatiquement après connexion réussie
+          // if ((await supabase.auth.getUser()).data.user) {
+          //   runFullUserFlow();
+          // }
+        }, 1500);
+      }
+    });
+
+    runFlowBtn.addEventListener('click', runFullUserFlow);
+
+    loginBtn.addEventListener('click', async () => {
+        log('Tentative de connexion via OAuth...');
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.href
+            }
+        });
+        if (error) {
+            log(`Erreur de connexion OAuth: ${error.message}`, 'error');
+        }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+        await stepLogout();
+    });
+
+    resetBtn.addEventListener('click', () => {
+        try {
+            log('Réinitialisation des données locales (localStorage)...');
+            StorageService.resetAllData(); // Assurez-vous que cette méthode existe et fait ce qu'il faut
+            localStorage.removeItem('pending_user_responses'); // Vider aussi les réponses en attente
+            log('Données locales réinitialisées.', 'success');
+        } catch (error) {
+            log(`Erreur lors de la réinitialisation locale: ${error.message}`, 'error');
+        }
+    });
+
+  </script>
+</body>
+</html>
