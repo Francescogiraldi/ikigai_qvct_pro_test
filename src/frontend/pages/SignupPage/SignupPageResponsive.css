@@ -3,11 +3,17 @@
 /* Styles de base pour tous les écrans */
 .signup-container {
   padding: 1rem;
+  align-items: center;
+  justify-content: center;
+  max-height: 100vh;
 }
 
 .signup-form-container {
   width: 100%;
-  max-width: 28rem; /* 448px */
+  max-width: 26rem; /* 416px - réduit de 28rem */
+  max-height: 85vh; /* Réduit de 90vh */
+  overflow-y: auto;
+  padding-right: 0.5rem; /* Espace pour la barre de défilement */
 }
 
 /* Petits écrans (téléphones) */
