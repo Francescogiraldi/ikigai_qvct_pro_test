@@ -5,7 +5,7 @@ import Character from '../components/ui/Character';
 const WelcomePage = ({ onStart, onSignIn }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl w-full max-w-md p-5 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-3xl w-full max-w-md p-5 overflow-hidden">
         <div className="flex justify-center mb-4">
           <Character character="🧘" emotion="happy" size="text-6xl" />
         </div>

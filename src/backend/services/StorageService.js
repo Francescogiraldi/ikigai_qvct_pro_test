@@ -93,7 +93,16 @@ class StorageService {
           }
         } else if (typeof data.settings === 'object') {
           // Si c'est déjà un objet, le fusionner avec les paramètres par défaut
-          return { ...defaultSettings, ...data.settings };
+          // S'assurer que les valeurs booléennes sont correctement converties
+          const settings = { ...defaultSettings };
+          Object.keys(data.settings).forEach(key => {
+            if (typeof defaultSettings[key] === 'boolean') {
+              settings[key] = Boolean(data.settings[key]);
+            } else {
+              settings[key] = data.settings[key];
+            }
+          });
+          return settings;
         } else {
           console.warn('Format des paramètres inattendu:', data.settings);
           return defaultSettings;

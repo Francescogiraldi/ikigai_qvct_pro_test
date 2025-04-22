@@ -92,23 +92,7 @@ const MoodSelector = ({
         ))}
       </motion.div>
       
-      {/* Barre de progression visuelle */}
-      <motion.div 
-        className="w-full h-1.5 bg-gray-100 rounded-full mt-2 overflow-hidden"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: selectedMood ? 1 : 0 }}
-      >
-        <motion.div 
-          className="h-full rounded-full"
-          style={{ 
-            background: `linear-gradient(to right, #EF4444, #FBBF24, #10B981)`,
-            width: selectedMood ? `${(selectedMood / 5) * 100}%` : '0%'
-          }}
-          initial={{ width: '0%' }}
-          animate={{ width: selectedMood ? `${(selectedMood / 5) * 100}%` : '0%' }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        />
-      </motion.div>
+      {/* Barre de progression visuelle supprimée pour une interface plus minimaliste */}
     </div>
   );
 };

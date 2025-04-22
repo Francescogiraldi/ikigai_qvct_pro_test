@@ -304,7 +304,7 @@ const ProfilePage = ({
                     .from('user_settings')
                     .upsert({ 
                       user_id: user.id, 
-                      settings: JSON.stringify(settingsToSave), 
+                      settings: settingsToSave, // Envoyer l'objet directement sans JSON.stringify
                       updated_at: new Date() 
                     }, { onConflict: 'user_id' });
                     
