@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Badge from '../components/ui/Badge';
 import { supabase } from '../../shared/supabase';
+import API from '../../backend/api';
 
 const ProfilePage = ({ 
   progress, 
