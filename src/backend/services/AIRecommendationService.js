@@ -2,7 +2,8 @@
 // Analyse les réponses utilisateur et génère des recommandations personnalisées
 // Version améliorée avec traitement de langage naturel
 
-import { supabase, handleSupabaseError } from '../../shared/supabase';
+import { supabase } from '../../shared/supabase';
+import ErrorHandler from '../../shared/ErrorHandler';
 import { AI_CONFIG } from '../../config';
 import ContentService from './ContentService';
 
@@ -37,7 +38,7 @@ class AIRecommendationService {
 
       if (responsesError) {
         console.error('Erreur lors de la récupération des réponses:', responsesError);
-        return { success: false, error: handleSupabaseError(responsesError) };
+        return ErrorHandler.handle(responsesError, 'Récupération des réponses');
       }
 
       // Récupérer les données de progression
@@ -49,7 +50,7 @@ class AIRecommendationService {
 
       if (progressError && progressError.code !== 'PGRST116') {
         console.error('Erreur lors de la récupération de la progression:', progressError);
-        return { success: false, error: handleSupabaseError(progressError) };
+        return ErrorHandler.handle(progressError, 'Récupération de la progression');
       }
 
       // Récupérer les métadonnées utilisateur
@@ -76,7 +77,7 @@ class AIRecommendationService {
       };
     } catch (error) {
       console.error('Erreur lors de l\'analyse des réponses:', error);
-      return { success: false, error: handleSupabaseError(error) };
+      return ErrorHandler.handle(error, 'Analyse des réponses');
     }
   }
 
@@ -1032,7 +1033,7 @@ class AIRecommendationService {
       return { success: true };
     } catch (error) {
       console.error('Erreur lors de la sauvegarde des recommandations:', error);
-      return { success: false, error: handleSupabaseError(error) };
+      return ErrorHandler.handle(error, 'Enregistrement des recommandations');
     }
   }
 
@@ -1088,7 +1089,7 @@ class AIRecommendationService {
       return await this.analyzeUserResponses(userId);
     } catch (error) {
       console.error('Erreur lors de la récupération des recommandations:', error);
-      return { success: false, error: handleSupabaseError(error) };
+      return ErrorHandler.handle(error, 'Récupération des recommandations');
     }
   }
 }

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import CSRFProtection from './CSRFProtection';
 
 // Configuration Supabase depuis les variables d'environnement
 // Utilisation d'une fonction pour obtenir les clés de manière plus sécurisée
@@ -30,6 +31,11 @@ const options = {
     headers: {},
     // Gestionnaire d'erreurs global
     fetch: (url, options) => {
+      // Ajouter les en-têtes CSRF pour les méthodes non-GET
+      if (options.method && options.method !== 'GET') {
+        options.headers = CSRFProtection.prepareHeaders(options.headers || {});
+      }
+      
       return fetch(url, {
         ...options,
         // Ajouter un timeout pour éviter les requêtes qui ne se terminent jamais
@@ -49,6 +55,11 @@ const options = {
 
 // Création du client Supabase avec les options
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, options);
+
+// Fonction pour préparer les en-têtes avec protection CSRF
+export const prepareCSRFHeaders = (headers = {}) => {
+  return CSRFProtection.prepareHeaders(headers);
+};
 
 // Fonction utilitaire pour traiter les erreurs Supabase
 export const handleSupabaseError = (error) => {

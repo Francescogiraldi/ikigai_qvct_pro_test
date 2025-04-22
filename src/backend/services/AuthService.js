@@ -1,7 +1,8 @@
 // Service d'authentification pour l'application IKIGAI
 // Gère les connexions, inscriptions et déconnexions d'utilisateurs
 
-import { supabase, handleSupabaseError } from '../../shared/supabase';
+import { supabase } from '../../shared/supabase';
+import ErrorHandler from '../../shared/ErrorHandler';
 import Validator from '../../shared/Validator';
 import SessionManager from '../../shared/SessionManager';
 
@@ -51,23 +52,69 @@ class AuthService {
     }
   }
   
+  // Fonction de validation robuste des mots de passe
+  static validatePassword(password) {
+    if (!password || typeof password !== 'string') {
+      return { isValid: false, message: "Le mot de passe est requis" };
+    }
+    
+    // Vérification de la longueur minimale
+    if (password.length < 8) {
+      return { isValid: false, message: "Le mot de passe doit contenir au moins 8 caractères" };
+    }
+    
+    // Vérification des critères de complexité
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+    
+    if (!hasUppercase) {
+      return { isValid: false, message: "Le mot de passe doit contenir au moins une lettre majuscule" };
+    }
+    
+    if (!hasLowercase) {
+      return { isValid: false, message: "Le mot de passe doit contenir au moins une lettre minuscule" };
+    }
+    
+    if (!hasNumber) {
+      return { isValid: false, message: "Le mot de passe doit contenir au moins un chiffre" };
+    }
+    
+    if (!hasSpecial) {
+      return { isValid: false, message: "Le mot de passe doit contenir au moins un caractère spécial" };
+    }
+    
+    return { isValid: true, message: "Mot de passe valide" };
+  }
+  
   // Inscription avec email et mot de passe
   static async signUp(email, password) {
     try {
       // Validation des données
       const validation = Validator.validate(
-        { email, password },
+        { email },
         {
-          email: [{ type: 'required' }, { type: 'email' }],
-          password: [{ type: 'required' }, { type: 'minLength', value: 8 }]
+          email: [{ type: 'required' }, { type: 'email' }]
         }
       );
+      
+      // Validation spécifique du mot de passe avec notre fonction robuste
+      const passwordValidation = this.validatePassword(password);
       
       if (!validation.isValid) {
         return {
           user: null,
           success: false,
           message: Object.values(validation.errors)[0][0] // Premier message d'erreur
+        };
+      }
+      
+      if (!passwordValidation.isValid) {
+        return {
+          user: null,
+          success: false,
+          message: passwordValidation.message
         };
       }
       
@@ -97,14 +144,9 @@ class AuthService {
     } catch (error) {
       console.error('Erreur lors de l\'inscription:', error);
       
-      // Utiliser la fonction utilitaire pour obtenir un message d'erreur approprié
-      const errorMessage = handleSupabaseError(error);
+      // Utiliser le gestionnaire d'erreurs centralisé
+      return ErrorHandler.handle(error, 'Inscription');
       
-      return {
-        user: null,
-        success: false,
-        message: errorMessage || "Erreur lors de l'inscription. Veuillez réessayer."
-      };
     }
   }
   
@@ -140,14 +182,9 @@ class AuthService {
     } catch (error) {
       console.error('Erreur lors de la connexion:', error);
       
-      // Utiliser la fonction utilitaire pour obtenir un message d'erreur approprié
-      const errorMessage = handleSupabaseError(error);
+      // Utiliser le gestionnaire d'erreurs centralisé
+      return ErrorHandler.handle(error, 'Connexion');
       
-      return {
-        user: null,
-        success: false,
-        message: errorMessage || "Identifiants incorrects. Veuillez réessayer."
-      };
     }
   }
   
@@ -160,15 +197,44 @@ class AuthService {
       // Générer un identifiant unique pour cette session d'auth
       const authSessionId = `google_auth_${Date.now()}`;
       
-      // Vérifier si l'onboarding a déjà été complété
-      // en interrogeant directement Supabase pour éviter les incohérences
+      // Vérifier si l'onboarding a déjà été complété en interrogeant directement Supabase
       let needsOnboarding = true;
       try {
-        // Vérifier si nous avons des informations locales sur l'onboarding
-        const existingOnboardingStatus = localStorage.getItem('onboardingCompleted');
-        if (existingOnboardingStatus === 'true') {
-          needsOnboarding = false;
-          console.log('Connexion Google - Statut local d\'onboarding confirmé comme complété');
+        // Récupérer l'utilisateur actuel si déjà connecté (pour les reconnexions OAuth)
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user && user.id) {
+          // Vérifier dans la base de données si l'onboarding est complété
+          const { data: userProgressData, error: progressError } = await supabase
+            .from('user_progress')
+            .select('progress_data')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (!progressError && userProgressData?.progress_data) {
+            // Analyser les données de progression
+            const progressData = typeof userProgressData.progress_data === 'string' 
+              ? JSON.parse(userProgressData.progress_data) 
+              : userProgressData.progress_data;
+            
+            if (progressData?.moduleResponses?.onboarding?.completedAt) {
+              needsOnboarding = false;
+              console.log('Connexion Google - Statut d\'onboarding confirmé comme complété via Supabase');
+            }
+          }
+          
+          // Double vérification dans la table user_responses
+          const { data: onboardingData, error: onboardingError } = await supabase
+            .from('user_responses')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('module_id', 'onboarding')
+            .single();
+            
+          if (!onboardingError && onboardingData) {
+            needsOnboarding = false;
+            console.log('Connexion Google - Statut d\'onboarding confirmé comme complété via user_responses');
+          }
         }
       } catch (storageError) {
         console.warn('Erreur lors de la vérification du statut d\'onboarding:', storageError);
@@ -213,13 +279,9 @@ class AuthService {
     } catch (error) {
       console.error('Erreur lors de la connexion avec Google:', error);
       
-      // Utiliser la fonction utilitaire pour obtenir un message d'erreur approprié
-      const errorMessage = handleSupabaseError(error);
+      // Utiliser le gestionnaire d'erreurs centralisé
+      return ErrorHandler.handle(error, 'Connexion Google');
       
-      return {
-        success: false,
-        message: errorMessage || "Erreur lors de la connexion avec Google. Veuillez réessayer."
-      };
     }
   }
   
@@ -286,13 +348,9 @@ class AuthService {
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
       
-      // Utiliser la fonction utilitaire pour obtenir un message d'erreur approprié
-      const errorMessage = handleSupabaseError(error);
+      // Utiliser le gestionnaire d'erreurs centralisé
+      return ErrorHandler.handle(error, 'Déconnexion');
       
-      return {
-        success: false,
-        message: errorMessage
-      };
     }
   }
   
@@ -355,13 +413,9 @@ class AuthService {
     } catch (error) {
       console.error('Erreur lors de la réinitialisation du mot de passe:', error);
       
-      // Utiliser la fonction utilitaire pour obtenir un message d'erreur approprié
-      const errorMessage = handleSupabaseError(error);
+      // Utiliser le gestionnaire d'erreurs centralisé
+      return ErrorHandler.handle(error, 'Réinitialisation de mot de passe');
       
-      return {
-        success: false,
-        message: errorMessage || "Erreur lors de l'envoi de l'email de réinitialisation. Veuillez réessayer."
-      };
     }
   }
 }

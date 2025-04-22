@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { supabase, handleSupabaseError } from '../../shared/supabase';
+import { supabase } from '../../shared/supabase';
+import ErrorHandler from '../../shared/ErrorHandler';
 import API from '../../backend/api';
 import './SignupPage/SignupPageResponsive.css'; // Import des styles responsifs
 import LegalPages from './LegalPages'; // Import du composant pour les pages légales
@@ -341,11 +342,11 @@ const SignupPage = ({ onComplete, onCancel }) => {
     } catch (error) {
       console.error(`Erreur lors de ${isLoginMode ? 'la connexion' : 'l\'inscription'}:`, error);
       
-      // Utiliser notre fonction utilitaire pour obtenir un message d'erreur propre
-      const errorMessage = handleSupabaseError(error);
+      // Utiliser le gestionnaire d'erreurs centralisé
+      const errorResult = ErrorHandler.handle(error, isLoginMode ? 'Connexion' : 'Inscription');
       
       // Définir le message d'erreur à afficher
-      setError(errorMessage);
+      setError(errorResult.message);
       
       // Logguer des informations supplémentaires pour le débogage
       if (typeof error === 'object' && Object.keys(error).length === 0) {
@@ -381,11 +382,11 @@ const SignupPage = ({ onComplete, onCancel }) => {
     } catch (error) {
       console.error('Erreur lors de la connexion avec Google:', error);
       
-      // Utiliser notre fonction utilitaire pour obtenir un message d'erreur propre
-      const errorMessage = handleSupabaseError(error);
+      // Utiliser le gestionnaire d'erreurs centralisé
+      const errorResult = ErrorHandler.handle(error, 'Connexion Google');
       
       // Définir le message d'erreur à afficher
-      setError(errorMessage);
+      setError(errorResult.message);
     } finally {
       setLoading(false);
     }
