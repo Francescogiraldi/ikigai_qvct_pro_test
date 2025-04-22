@@ -6,8 +6,11 @@ import reportWebVitals from './reportWebVitals';
 
 // Polyfills pour le client Gradio
 window.global = window;
-window.process = { env: {} };
-global.process = { env: {} };
+// Préserver les variables d'environnement existantes
+window.process = window.process || {};
+window.process.env = window.process.env || process.env || {};
+global.process = global.process || {};
+global.process.env = global.process.env || process.env || {};
 global.Buffer = global.Buffer || require('buffer').Buffer;
 
 // Enregistrement du service worker pour la PWA
