@@ -12,7 +12,7 @@
   width: 100%;
   max-width: 26rem; /* 416px - réduit de 28rem */
   max-height: 90vh; /* Ajusté pour s'adapter à l'écran */
-  overflow-y: hidden; /* Suppression du défilement vertical */
+  overflow-y: auto; /* Permettre le défilement vertical */
   margin: 1rem; /* Ajout de marges */
 }
 
@@ -20,6 +20,7 @@
 @media (max-width: 640px) {
   .signup-form-container {
     max-width: 100%;
+    max-height: 85vh; /* Légèrement réduit pour les petits écrans */
   }
 }
 
