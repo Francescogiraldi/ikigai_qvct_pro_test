@@ -170,18 +170,15 @@ function App() {
         } else {
           // Utilisateur non connecté
           console.log("Utilisateur non authentifié");
+          // Toujours afficher d'abord la page d'accueil (WelcomePage) pour les utilisateurs non connectés
+          setShowWelcome(true);
+          setShowSignup(false);
+          setShowOnboarding(false);
+          console.log("Affichage de la page d'accueil - Utilisateur non connecté");
+          
+          // Stocker l'état d'onboarding pour une utilisation ultérieure
           if (isOnboardingCompleted) {
-            // Si l'onboarding est complété mais l'utilisateur n'est pas connecté, afficher la page de connexion
-            setShowSignup(true);
-            setShowWelcome(false);
-            setShowOnboarding(false);
-            console.log("Affichage de la page de connexion - Onboarding déjà complété");
-          } else {
-            // Nouvel utilisateur, afficher la page d'accueil
-            setShowWelcome(true);
-            setShowSignup(false);
-            setShowOnboarding(false);
-            console.log("Affichage de la page d'accueil - Nouvel utilisateur");
+            localStorage.setItem('onboardingCompleted', 'true');
           }
         }
         
