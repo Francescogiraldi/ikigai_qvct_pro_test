@@ -280,13 +280,6 @@ const ProfilePage = ({
                     throw new Error('Paramètres utilisateur invalides');
                   }
                   
-                  // Vérifier que nous avons un utilisateur connecté
-                  const { data: { user } } = await supabase.auth.getUser();
-                  if (!user) {
-                    alert('Utilisateur non trouvé. Veuillez vous reconnecter.');
-                    return;
-                  }
-                  
                   // S'assurer que tous les paramètres sont bien définis
                   // avec des valeurs par défaut si nécessaire
                   const settingsToSave = {
@@ -299,17 +292,11 @@ const ProfilePage = ({
                     meditationSounds: !!userSettings.meditationSounds
                   };
                   
-                  // Sauvegarder dans Supabase
-                  const { error } = await supabase
-                    .from('user_settings')
-                    .upsert({ 
-                      user_id: user.id, 
-                      settings: settingsToSave, // Envoyer l'objet directement sans JSON.stringify
-                      updated_at: new Date() 
-                    }, { onConflict: 'user_id' });
-                    
-                  if (error) {
-                    throw error;
+                  // Utiliser la nouvelle méthode API pour sauvegarder les paramètres
+                  const success = await API.progress.saveUserSettings(settingsToSave);
+                  
+                  if (!success) {
+                    throw new Error('Échec de la sauvegarde des paramètres');
                   }
                   
                   // Mettre à jour l'état global
@@ -319,7 +306,7 @@ const ProfilePage = ({
                   alert('Paramètres enregistrés avec succès!');
                 } catch (error) {
                   console.error('Erreur lors de la sauvegarde des paramètres:', error);
-                  alert('Erreur lors de la sauvegarde des paramètres: ' + error.message);
+                  alert('Erreur lors de la sauvegarde des paramètres: ' + (error.message || 'Veuillez réessayer'));
                 }
               }}
             >

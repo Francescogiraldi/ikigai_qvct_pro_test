@@ -11,21 +11,16 @@ const DailyFeeling = ({ onSubmit, userId }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [selectedValue, setSelectedValue] = useState(null);
   
-  // Emojis du plus positif au plus négatif
-  const emojis = ['😄', '🙂', '😊', '😐', '😕', '🙁', '😟', '😢', '😫', '😭'];
+  // Emojis du plus positif au plus négatif (réduits à 5 pour éviter la duplication)
+  const emojis = ['😄', '🙂', '😐', '🙁', '😭'];
   
-  // Couleurs du vert au rouge
+  // Couleurs du vert au rouge (réduites à 5 pour correspondre aux emojis)
   const colors = [
     '#22c55e', // vert
-    '#4ade80',
     '#86efac',
-    '#bef264',
     '#facc15', // jaune
-    '#fb923c',
     '#f97316',
-    '#ef4444', // rouge
-    '#dc2626',
-    '#b91c1c'
+    '#dc2626'  // rouge
   ];
   
   useEffect(() => {
@@ -90,11 +85,8 @@ const DailyFeeling = ({ onSubmit, userId }) => {
     }
   };
   
-  // Inverser l'index pour que les valeurs plus élevées correspondent aux émotions positives
-  const getEmojiIndex = (value) => {
-    // Convertir la valeur (1-10) en index (0-9) et inverser
-    return 9 - (value - 1);
-  };
+  // Cette fonction n'est plus nécessaire car nous utilisons directement l'index
+  // des tableaux emojis et colors
   
   if (!isVisible) return null;
   
@@ -116,7 +108,7 @@ const DailyFeeling = ({ onSubmit, userId }) => {
             
             <div className="mb-6">
               <div className="flex justify-between mb-3">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
+                {[1, 2, 3, 4, 5].map((value) => (
                   <div key={value} className="text-center">
                     <motion.div 
                       className="cursor-pointer"
@@ -129,14 +121,14 @@ const DailyFeeling = ({ onSubmit, userId }) => {
                       } : {}}
                       onClick={() => setSelectedValue(value)}
                     >
-                      <div className="text-2xl mb-1">
-                        {emojis[getEmojiIndex(value)]}
+                      <div className="text-3xl mb-1">
+                        {emojis[value-1]}
                       </div>
                       <div 
-                        className={`w-8 h-8 rounded-full mx-auto flex items-center justify-center text-white text-sm font-bold ${selectedValue === value ? 'ring-2 ring-offset-2' : ''}`}
-                        style={{ backgroundColor: colors[getEmojiIndex(value)] }}
+                        className={`w-8 h-8 rounded-full mx-auto flex items-center justify-center ${selectedValue === value ? 'ring-2 ring-offset-2' : ''}`}
+                        style={{ backgroundColor: colors[value-1] }}
                       >
-                        {value}
+                        {/* Suppression des notations numériques */}
                       </div>
                     </motion.div>
                   </div>

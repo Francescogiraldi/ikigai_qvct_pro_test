@@ -117,6 +117,42 @@ class StorageService {
       return defaultSettings;
     }
   }
+  
+  // Sauvegarder les paramètres utilisateur dans Supabase
+  static async saveUserSettings(settings) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log("Utilisateur non connecté, impossible de sauvegarder les paramètres.");
+        return false;
+      }
+      
+      // S'assurer que les paramètres sont valides
+      if (!settings || typeof settings !== 'object') {
+        console.error('Paramètres utilisateur invalides');
+        return false;
+      }
+      
+      // Sauvegarder dans Supabase
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert({ 
+          user_id: user.id, 
+          settings: settings, 
+          updated_at: new Date() 
+        }, { onConflict: 'user_id' });
+        
+      if (error) {
+        console.error('Erreur lors de la sauvegarde des paramètres:', error);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Erreur générale lors de la sauvegarde des paramètres:', error);
+      return false;
+    }
+  }
 
   // Version synchrone utilisant localStorage (fallback)
   static getProgressSync() {

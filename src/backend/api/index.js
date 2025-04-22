@@ -77,6 +77,11 @@ export const progressAPI = {
   getUserSettings: async () => {
     return await StorageService.getUserSettings();
   },
+  
+  // Sauvegarder les paramètres utilisateur
+  saveUserSettings: async (settings) => {
+    return await StorageService.saveUserSettings(settings);
+  },
 };
 
 // API de contenu

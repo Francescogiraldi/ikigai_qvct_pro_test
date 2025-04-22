@@ -195,7 +195,7 @@ function App() {
   }, [userSettings.darkMode]); // Ajout de userSettings.darkMode comme dépendance
   
   // Fonction pour mettre à jour les paramètres globaux et appliquer les changements
-  const updateGlobalSettings = (newSettings) => {
+  const updateGlobalSettings = async (newSettings) => {
     setUserSettings(newSettings);
     
     // Apply dark mode change with smooth transition
@@ -218,6 +218,13 @@ function App() {
       // La langue sera gérée par le contexte LanguageContext
       // Cette ligne met à jour localStorage pour que le contexte puisse détecter le changement
       localStorage.setItem('ikigai_language', newSettings.language);
+    }
+    
+    // Sauvegarder les paramètres dans Supabase
+    try {
+      await API.progress.saveUserSettings(newSettings);
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde des paramètres:", error);
     }
   };
 
