@@ -42,3 +42,7 @@ export { UserProgress } from '../backend/models/UserProgress';
 
 // Exporter les utilitaires et configurations
 export { supabase, handleSupabaseError } from './supabase';
+export { default as Logger } from './Logger';
+export { default as SecureStorage } from './SecureStorage';
+export { default as Validator } from './Validator';
+export { default as SessionManager } from './SessionManager';

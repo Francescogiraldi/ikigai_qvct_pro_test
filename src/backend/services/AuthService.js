@@ -2,6 +2,8 @@
 // Gère les connexions, inscriptions et déconnexions d'utilisateurs
 
 import { supabase, handleSupabaseError } from '../../shared/supabase';
+import Validator from '../../shared/Validator';
+import SessionManager from '../../shared/SessionManager';
 
 // Fonction utilitaire pour envoyer un email de bienvenue via le webhook Make
 async function sendWelcomeEmail(email, userData, type = 'email') {
@@ -16,7 +18,7 @@ async function sendWelcomeEmail(email, userData, type = 'email') {
       nom = userData?.user_metadata?.full_name || userData?.user_metadata?.name || '';
     }
 
-    await fetch('https://hook.eu2.make.com/lug2alohxnexe5nf212fmsjmo8qy7a13', {
+    await fetch(process.env.REACT_APP_WELCOME_EMAIL_WEBHOOK, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -52,6 +54,23 @@ class AuthService {
   // Inscription avec email et mot de passe
   static async signUp(email, password) {
     try {
+      // Validation des données
+      const validation = Validator.validate(
+        { email, password },
+        {
+          email: [{ type: 'required' }, { type: 'email' }],
+          password: [{ type: 'required' }, { type: 'minLength', value: 8 }]
+        }
+      );
+      
+      if (!validation.isValid) {
+        return {
+          user: null,
+          success: false,
+          message: Object.values(validation.errors)[0][0] // Premier message d'erreur
+        };
+      }
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password
@@ -105,6 +124,12 @@ class AuthService {
       // Vérifier si data.user existe
       if (!data || !data.user) {
         throw new Error("Erreur lors de la connexion. Veuillez vérifier vos identifiants.");
+      }
+      
+      // Si l'authentification réussit :
+      if (data && data.user) {
+        // Créer une session
+        SessionManager.createSession(data.user);
       }
       
       return {
@@ -241,6 +266,9 @@ class AuthService {
         console.warn('Erreur lors du nettoyage des données de session:', cleanupError);
       }
       
+      // Effacer la session
+      SessionManager.clearSession();
+      
       // Ensuite déclencher la déconnexion Supabase
       const { error } = await supabase.auth.signOut({
         scope: 'global' // Déconnexion sur tous les appareils et onglets
@@ -301,7 +329,7 @@ class AuthService {
       
       // Envoyer un email personnalisé via le webhook Make
       try {
-        await fetch('https://hook.eu2.make.com/pegesm7e33qiz22d1alw86hekodzsqvn', {
+        await fetch(process.env.REACT_APP_PASSWORD_RESET_WEBHOOK, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

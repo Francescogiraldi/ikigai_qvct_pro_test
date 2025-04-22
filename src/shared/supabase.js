@@ -7,17 +7,10 @@ const getSupabaseConfig = () => {
   const url = process.env.REACT_APP_SUPABASE_URL;
   const key = process.env.REACT_APP_SUPABASE_ANON_KEY;
   
-  // Si les variables d'environnement ne sont pas définies, afficher un avertissement
+  // Si les variables d'environnement ne sont pas définies, bloquer l'application
   if (!url || !key) {
-    console.warn('ATTENTION: Variables d\'environnement Supabase non définies. Veuillez configurer votre fichier .env');
-    console.warn('Voir le fichier .env.template pour les variables à configurer');
-    
-    // Retourner des valeurs vides pour éviter les erreurs
-    // L'application devrait gérer ce cas et afficher un message approprié
-    return { 
-      supabaseUrl: '', 
-      supabaseAnonKey: '' 
-    };
+    // Bloquer l'application si les variables sont manquantes
+    throw new Error('Variables d\'environnement Supabase manquantes. L\'application ne peut pas fonctionner sans elles.');
   }
   
   return { supabaseUrl: url, supabaseAnonKey: key };

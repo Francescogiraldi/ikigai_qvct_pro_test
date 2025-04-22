@@ -3,6 +3,7 @@
 
 import { supabase } from '../../shared/supabase';
 import { UserProgress } from '../models/UserProgress';
+import SecureStorage from '../../shared/SecureStorage';
 
 class StorageService {
   // Clé utilisée pour le stockage local
@@ -154,16 +155,11 @@ class StorageService {
     }
   }
 
-  // Version synchrone utilisant localStorage (fallback)
+  // Version synchrone utilisant SecureStorage (fallback)
   static getProgressSync() {
-    const savedProgress = localStorage.getItem(this.LOCAL_STORAGE_KEY);
+    const savedProgress = SecureStorage.getItem(this.LOCAL_STORAGE_KEY);
     if (savedProgress) {
-      try {
-        return JSON.parse(savedProgress);
-      } catch (e) {
-        console.error('Erreur lors du parsing des données locales:', e);
-        return this.getInitialProgress();
-      }
+      return savedProgress;
     }
     return this.getInitialProgress();
   }
@@ -172,7 +168,7 @@ class StorageService {
   static async saveProgress(progressData) {
     try {
       // Sauvegarder en local d'abord (fallback)
-      localStorage.setItem(this.LOCAL_STORAGE_KEY, JSON.stringify(progressData));
+      SecureStorage.setItem(this.LOCAL_STORAGE_KEY, progressData);
       
       // Vérifier si l'utilisateur est connecté
       const { data: { user } } = await supabase.auth.getUser();
@@ -225,7 +221,7 @@ class StorageService {
     const updatedProgress = userProgress.toJSON();
     
     // Sauvegarder les changements
-    localStorage.setItem(this.LOCAL_STORAGE_KEY, JSON.stringify(updatedProgress));
+    SecureStorage.setItem(this.LOCAL_STORAGE_KEY, updatedProgress);
     return updatedProgress;
   }
   
@@ -257,7 +253,7 @@ class StorageService {
     const updatedProgress = userProgress.toJSON();
     
     // Sauvegarder les changements
-    localStorage.setItem(this.LOCAL_STORAGE_KEY, JSON.stringify(updatedProgress));
+    SecureStorage.setItem(this.LOCAL_STORAGE_KEY, updatedProgress);
     return updatedProgress;
   }
   
@@ -293,7 +289,7 @@ class StorageService {
       const progress = await this.getProgress();
       const userProgress = UserProgress.fromJSON(progress);
       userProgress.saveModuleResponses('onboarding', responsesToSave);
-      localStorage.setItem(this.LOCAL_STORAGE_KEY, JSON.stringify(userProgress.toJSON()));
+      SecureStorage.setItem(this.LOCAL_STORAGE_KEY, userProgress.toJSON());
       
       // Vérifier si l'utilisateur est connecté
       const { data: { user } } = await supabase.auth.getUser();
@@ -340,12 +336,12 @@ class StorageService {
           console.error("StorageService: Échec de toutes les stratégies:", err);
           
           // Sauvegarder localement en cas d'échec total
-          localStorage.setItem('onboarding_responses_backup', JSON.stringify({
+          SecureStorage.setItem('onboarding_responses_backup', {
             user_id: user.id,
             responses: responsesToSave,
             timestamp: new Date().toISOString(),
             error: err.message
-          }));
+          });
         }
         
         // Dans tous les cas, mettre à jour user_progress pour compatibilité
@@ -390,7 +386,7 @@ class StorageService {
     const userProgress = UserProgress.fromJSON(progress);
     userProgress.saveModuleResponses('onboarding', responsesToSave);
     const updatedProgress = userProgress.toJSON();
-    localStorage.setItem(this.LOCAL_STORAGE_KEY, JSON.stringify(updatedProgress));
+    SecureStorage.setItem(this.LOCAL_STORAGE_KEY, updatedProgress);
     return updatedProgress;
   }
   
@@ -432,13 +428,13 @@ class StorageService {
     const updatedProgress = userProgress.toJSON();
     
     // Sauvegarder les changements
-    localStorage.setItem(this.LOCAL_STORAGE_KEY, JSON.stringify(updatedProgress));
+    SecureStorage.setItem(this.LOCAL_STORAGE_KEY, updatedProgress);
     return updatedProgress;
   }
   
   // Réinitialiser toutes les données
   static resetAllData() {
-    localStorage.removeItem(this.LOCAL_STORAGE_KEY);
+    SecureStorage.removeItem(this.LOCAL_STORAGE_KEY);
     return this.getInitialProgress();
   }
 }

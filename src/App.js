@@ -9,6 +9,7 @@ import OnboardingJourney from './frontend/pages/OnboardingJourney';
 import OnboardingAnalysisPage from './frontend/pages/OnboardingAnalysisPage';
 import ResetPassword from './frontend/pages/ResetPassword';
 import { LanguageProvider } from './frontend/context/LanguageContext';
+import SecureStorage from './shared/SecureStorage';
 
 function App() {
   const [progress, setProgress] = useState(null);
@@ -123,14 +124,14 @@ function App() {
           console.log("Onboarding confirmé comme complété dans les données utilisateur");
         }
         
-        // Si non complété dans les données utilisateur, vérifier localStorage
+        // Si non complété dans les données utilisateur, vérifier SecureStorage
         // mais uniquement si les données utilisateur sont vides (nouvel utilisateur)
         if (!isOnboardingCompleted && 
             (!userProgress.moduleResponses || !Object.keys(userProgress.moduleResponses).length)) {
-          const localStorageStatus = localStorage.getItem('onboardingCompleted');
-          if (localStorageStatus === 'true') {
+          const secureStorageStatus = SecureStorage.getItem('onboardingCompleted');
+          if (secureStorageStatus === 'true') {
             isOnboardingCompleted = true;
-            console.log("Onboarding confirmé comme complété dans localStorage");
+            console.log("Onboarding confirmé comme complété dans SecureStorage");
           }
         }
         
@@ -178,12 +179,12 @@ function App() {
           
           // Stocker l'état d'onboarding pour une utilisation ultérieure
           if (isOnboardingCompleted) {
-            localStorage.setItem('onboardingCompleted', 'true');
+            SecureStorage.setItem('onboardingCompleted', 'true');
           }
         }
         
-        // Nettoyer localStorage après utilisation
-        localStorage.removeItem('onboardingCompleted');
+        // Nettoyer SecureStorage après utilisation
+        SecureStorage.removeItem('onboardingCompleted');
       } catch (error) {
         console.error("Erreur lors de l'initialisation:", error);
       } finally {
