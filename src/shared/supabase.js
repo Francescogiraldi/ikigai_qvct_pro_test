@@ -2,24 +2,26 @@ import { createClient } from '@supabase/supabase-js';
 import CSRFProtection from './CSRFProtection';
 
 // Configuration Supabase depuis les variables d'environnement
-// Utilisation d'une fonction pour obtenir les clés de manière plus sécurisée
 const getSupabaseConfig = () => {
-  // Essayer d'abord de récupérer depuis les variables d'environnement
   const url = process.env.REACT_APP_SUPABASE_URL;
   const key = process.env.REACT_APP_SUPABASE_ANON_KEY;
-  
+
+  // Log sécurisé - sans exposer les valeurs
+  console.log("Configuration Supabase: URL et clé " + 
+    (url && key ? "définies" : "manquantes"));
+
   // Si les variables d'environnement ne sont pas définies, bloquer l'application
   if (!url || !key) {
     // Bloquer l'application si les variables sont manquantes
     throw new Error('Variables d\'environnement Supabase manquantes. L\'application ne peut pas fonctionner sans elles.');
   }
-  
+
   return { supabaseUrl: url, supabaseAnonKey: key };
 };
 
 const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
 
-// Options de configuration supplémentaires pour éviter les problèmes d'erreurs vides
+// Options de configuration avec prise en charge explicite des headers
 const options = {
   auth: {
     autoRefreshToken: true,
@@ -27,25 +29,32 @@ const options = {
     detectSessionInUrl: true
   },
   global: {
-    // Ajouter un gestionnaire global pour intercepter les erreurs
-    headers: {},
-    // Gestionnaire d'erreurs global
+    headers: {
+      // Ajout explicite de l'API key comme header
+      apikey: supabaseAnonKey
+    },
     fetch: (url, options) => {
+      // S'assurer que chaque requête contient l'API key
+      if (!options.headers) options.headers = {};
+      options.headers['apikey'] = supabaseAnonKey;
+      options.headers['Authorization'] = `Bearer ${supabaseAnonKey}`;
+
       // Ajouter les en-têtes CSRF pour les méthodes non-GET
       if (options.method && options.method !== 'GET') {
         options.headers = CSRFProtection.prepareHeaders(options.headers || {});
       }
-      
+
+      // Log sécurisé - confirme l'envoi des en-têtes mais sans les afficher
+      console.log("Requête envoyée à Supabase avec en-têtes d'authentification");
+
       return fetch(url, {
         ...options,
-        // Ajouter un timeout pour éviter les requêtes qui ne se terminent jamais
         signal: options.signal || (AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined),
       })
       .catch(error => {
-        console.error("Erreur de fetch Supabase:", error);
-        // Retourner une erreur formatée
+        console.error("Erreur de fetch Supabase:", error.name);
         if (error.name === 'AbortError') {
-          throw new Error('La requête a pris trop de temps à s\'exécuter. Veuillez vérifier votre connexion internet.');
+          throw new Error('La requête a pris trop de temps à s\'exécuter.');
         }
         throw error;
       });
