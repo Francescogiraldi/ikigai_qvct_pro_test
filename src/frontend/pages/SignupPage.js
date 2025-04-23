@@ -159,6 +159,8 @@ const SignupPage = ({ onComplete, onCancel }) => {
   // Fonction pour gérer la soumission du formulaire
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError(null); // Réinitialiser les erreurs précédentes
+    setSuccessMessage(''); // Réinitialiser les messages de succès
     
     // Vérifier que l'email est présent et valide avant de soumettre
     if (!email || email.trim() === '') {
@@ -211,119 +213,65 @@ const SignupPage = ({ onComplete, onCancel }) => {
         setError("Le mot de passe doit contenir au moins un caractère spécial.");
         return;
       }
+      // Vérifier les champs obligatoires pour l'inscription
+      if (!firstName || !lastName || !age || !status) {
+        setError("Veuillez remplir tous les champs obligatoires pour l'inscription.");
+        return;
+      }
     }
     
     setLoading(true);
-    setError(null);
-
+    
     try {
+      let result;
       if (isLoginMode) {
-        // Mode connexion
-        console.log("Tentative de connexion pour:", email);
-        
-        // Utiliser API.auth plutôt que d'appeler directement supabase
-        const result = await API.auth.signIn(email, password);
-        
-        if (!result.success) {
-          throw new Error(result.message || "Identifiants incorrects. Veuillez réessayer.");
-        }
-        
-        // Si nous arrivons ici, c'est que la connexion est réussie
-        const { data } = { data: { user: result.user }, error: null };
-
-        // Si la connexion est réussie, vérifier si l'utilisateur a déjà complété l'onboarding
-        // et passer à l'étape suivante
-        // Récupérer les données de progression de l'utilisateur
-        const { data: userProgressData, error: progressError } = await supabase
-          .from('user_progress')
-          .select('progress_data')
-          .eq('user_id', data.user.id)
-          .single();
-        
-        if (progressError && progressError.code !== 'PGRST116') {
-          // PGRST116 signifie que l'enregistrement n'a pas été trouvé, ce qui est normal pour un nouvel utilisateur
-          console.error("Erreur lors de la récupération des données de progression:", progressError);
-        }
-        
-        // Vérifier si l'onboarding est complété dans les données de progression
-        let isOnboardingCompleted = false;
-        
-        if (userProgressData?.progress_data) {
-          try {
-            // Les données sont stockées dans le champ JSON progress_data
-            const progressData = typeof userProgressData.progress_data === 'string' 
-              ? JSON.parse(userProgressData.progress_data) 
-              : userProgressData.progress_data;
-            isOnboardingCompleted = progressData?.moduleResponses?.onboarding?.completedAt ? true : false;
-          } catch (e) {
-            console.error("Erreur lors du parsing des données de progression:", e);
+        // En mode connexion
+        result = await API.auth.signIn(email, password);
+        if (result.success && result.user) {
+          setSuccessMessage('Connexion réussie!');
+          if (onComplete) {
+            onComplete(result.user); // Passer l'utilisateur à l'étape suivante
           }
+        } else {
+          setError(result.message || "Erreur lors de la connexion.");
         }
-        
-        // Vérifier également dans la table user_responses pour une double confirmation
-        const { data: onboardingData, error: onboardingError } = await supabase
-          .from('user_responses')
-          .select('*')
-          .eq('user_id', data.user.id)
-          .eq('module_id', 'onboarding')
-          .single();
-          
-        // Si des données existent dans user_responses, l'onboarding est complété
-        if (onboardingData && !onboardingError) {
-          isOnboardingCompleted = true;
-        }
-        
-        console.log('Données onboarding récupérées:', userProgressData);
-        console.log('Données onboarding table user_responses:', onboardingData);
-        console.log('État onboarding:', isOnboardingCompleted ? 'Complété' : 'Non complété');
-        
-        // Stocker cette information pour que App.js puisse l'utiliser lors de la redirection
-        localStorage.setItem('onboardingCompleted', isOnboardingCompleted ? 'true' : 'false');
-        
-        // Passer à l'étape suivante (App.js décidera où rediriger l'utilisateur)
-        onComplete();
       } else {
-        // Mode inscription
-        console.log("Tentative d'inscription pour:", email);
+        // En mode inscription
+        result = await API.auth.signUp(email, password, firstName, lastName, age, status);
         
-        // Déterminer le statut final (si "Autre" est sélectionné, utiliser la valeur de otherStatus)
-        const finalStatus = status === 'Autre' ? otherStatus : status;
-        
-        // Utiliser API.auth plutôt que d'appeler directement supabase
-        const result = await API.auth.signUp(email, password, firstName, lastName, age, finalStatus);
-        
-        if (!result.success) {
-          throw new Error(result.message || "L'inscription a échoué. Veuillez réessayer.");
+        if (result.success) {
+          // Vérifier si la confirmation par email est requise
+          if (result.requiresEmailConfirmation) {
+            setSuccessMessage(result.message); // Afficher le message demandant de vérifier les emails
+            // Ne pas appeler onComplete ici, l'utilisateur doit confirmer son email
+            // Fermer le modal après un délai pour laisser le temps de lire le message
+            setTimeout(() => {
+              if (onCancel) {
+                onCancel();
+              }
+            }, 3000); // Délai de 3 secondes
+          } else if (result.user) {
+            // Inscription réussie sans confirmation requise (ou déjà confirmée)
+            setSuccessMessage(result.message || 'Inscription réussie!');
+            if (onComplete) {
+              onComplete(result.user); // Passer l'utilisateur à l'étape suivante
+            }
+          } else {
+             // Cas où success est true mais user est null (ne devrait pas arriver mais sécurité)
+             setError("Une erreur inattendue s'est produite lors de l'inscription.");
+          }
+        } else {
+          // Gérer les erreurs d'inscription
+          setError(result.message || "Une erreur s'est produite lors de l'inscription.");
         }
-        
-        // Afficher le message de confirmation d'inscription
-        setSuccessMessage('Félicitation votre inscription est réussie ! 🎉');
-        
-        // Les métadonnées sont maintenant envoyées directement via signUp
-        // L'âge est également inclus dans les métadonnées, la mise à jour séparée dans 'profiles' n'est plus nécessaire ici.
-
-        // Pour un nouvel utilisateur, on doit toujours rediriger vers l'onboarding
-        // Définir explicitement que l'onboarding n'est pas complété pour un nouveau compte
-        localStorage.setItem('onboardingCompleted', 'false');
-        onComplete();
       }
     } catch (error) {
-      console.error(`Erreur lors de ${isLoginMode ? 'la connexion' : 'l\'inscription'}:`, error);
-      
-      // Utiliser le gestionnaire d'erreurs centralisé
-      const errorResult = ErrorHandler.handle(error, isLoginMode ? 'Connexion' : 'Inscription');
-      
-      // Définir le message d'erreur à afficher
-      setError(errorResult.message);
-      
-      // Logguer des informations supplémentaires pour le débogage
-      if (typeof error === 'object' && Object.keys(error).length === 0) {
-        console.error("Erreur d'authentification - objet vide retourné");
-        setError("Le service d'authentification est temporairement indisponible. Veuillez réessayer plus tard.");
-        return;
-      }
+      console.error('Erreur lors de la soumission:', error);
+      // Utiliser le gestionnaire d'erreurs pour un message plus précis si possible
+      const handledError = ErrorHandler.handle(error, isLoginMode ? 'Connexion' : 'Inscription');
+      setError(handledError.message || `Une erreur s'est produite lors de ${isLoginMode ? 'la connexion' : 'l\'inscription'}.`);
     } finally {
-      setLoading(false);
+      setLoading(false); // Assurer que le chargement est désactivé dans tous les cas
     }
   };
 
