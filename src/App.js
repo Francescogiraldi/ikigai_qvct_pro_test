@@ -573,6 +573,18 @@ function App() {
     );
   }
   
+  // Vérifier si onboarding était actif lors d'un rechargement de page
+  useEffect(() => {
+    // Si la variable globale indique que l'onboarding était actif
+    // mais que showOnboarding est false, c'est probablement un bug
+    if (window.IKIGAI_ONBOARDING_ACTIVE && !showOnboarding && !isLoading) {
+      console.warn("RESTAURATION CRITIQUE: Onboarding détecté comme actif mais non affiché");
+      setShowSignup(false);
+      setShowWelcome(false);
+      setShowOnboarding(true);
+    }
+  }, [showOnboarding, isLoading]);
+  
   // PRIORITÉ 2: Si une île est sélectionnée, afficher sa vue
   if (selectedIsland) {
     return (
@@ -585,18 +597,6 @@ function App() {
       />
     );
   }
-  
-  // Vérifier si onboarding était actif lors d'un rechargement de page
-  useEffect(() => {
-    // Si la variable globale indique que l'onboarding était actif
-    // mais que showOnboarding est false, c'est probablement un bug
-    if (window.IKIGAI_ONBOARDING_ACTIVE && !showOnboarding && !isLoading) {
-      console.warn("RESTAURATION CRITIQUE: Onboarding détecté comme actif mais non affiché");
-      setShowSignup(false);
-      setShowWelcome(false);
-      setShowOnboarding(true);
-    }
-  }, [showOnboarding, isLoading]);
 
   // PRIORITÉ 3: Si l'onboarding est actif, l'afficher
   if (showOnboarding) {

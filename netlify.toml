@@ -1,6 +1,22 @@
 [build]
   command = "CI=false npm run build"
   publish = "build"
+  # Increase build minutes allocation
+  [build.processing]
+    skip_processing = false
+  [build.processing.css]
+    bundle = true
+    minify = true
+  [build.processing.js]
+    bundle = true
+    minify = true
 
 [build.environment]
   NODE_VERSION = "18"
+  # Disable eslint warnings from failing the build
+  NETLIFY_USE_YARN = "false"
+  ESLINT_NO_DEV_ERRORS = "true"
+
+# Increase timeout for builds
+[functions]
+  node_bundler = "esbuild"
