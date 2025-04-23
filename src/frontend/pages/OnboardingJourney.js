@@ -23,6 +23,9 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [responses, setResponses] = useState({});
   
+  // Force le rendu complet du composant après le montage
+  const [isFullyMounted, setIsFullyMounted] = useState(false);
+  
   // Effet pour vérifier le montage du composant
   useEffect(() => {
     console.log("DEBUG OnboardingJourney: Composant monté", {
@@ -30,6 +33,12 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
       question: currentQuestion,
       timestamp: new Date().toISOString()
     });
+    
+    // Marquer le composant comme complètement monté après un court délai
+    setTimeout(() => {
+      setIsFullyMounted(true);
+      console.log("DEBUG OnboardingJourney: Marqué comme complètement monté");
+    }, 100);
     
     return () => {
       console.log("DEBUG OnboardingJourney: Composant démonté", {
@@ -829,6 +838,12 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
   
   return (
     <div className="gradient-container min-h-screen flex items-center justify-center p-4 sm:py-8 sm:px-6 md:p-10">
+      {/* Message de débogage initial */}
+      {!isFullyMounted && (
+        <div className="fixed top-2 left-2 bg-yellow-100 p-2 rounded text-xs z-50">
+          Initialisation de l'onboarding...
+        </div>
+      )}
       <motion.div 
         className="onboarding-journey-container max-w-3xl w-full p-4 sm:p-6 md:p-7 mx-auto"
         initial={{ opacity: 0, y: 20 }}

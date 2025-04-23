@@ -638,10 +638,16 @@ function App() {
               
               // Log de debug pour vérifier l'état après mise à jour
               console.log("DEBUG App.js: État d'onboarding défini sur true, vérification...");
+              
+              // IMPORTANT: S'assurer que isLoading est passé à false APRÈS le changement d'état
+              setTimeout(() => {
+                setIsLoading(false);
+                console.log("DEBUG App.js: isLoading défini à false après activation de l'onboarding");
+              }, 100);
+            } else {
+              // Terminer le chargement si on n'affiche pas l'onboarding
+              setIsLoading(false);
             }
-            
-            // Terminer le chargement et assurer que la transition est complète
-            setIsLoading(false);
             
             // Vérifier les états après le rendu
             setTimeout(() => {
@@ -653,7 +659,7 @@ function App() {
                 isOnboardingCompleted: isOnboardingCompleted,
                 timestamp: new Date().toISOString()
               });
-            }, 100);
+            }, 200);
             
           } catch (error) {
             console.error("Erreur lors de la redirection après authentification:", error);

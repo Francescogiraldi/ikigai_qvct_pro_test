@@ -253,26 +253,25 @@ const SignupPage = ({ onComplete, onCancel }) => {
             success: result.success
           });
           
-          setTimeout(() => {
-            if (onComplete) {
-              console.log("DEBUG: Exécution de la redirection vers onboarding");
-              onComplete(result.user); // Passer l'utilisateur à l'étape suivante (onboarding)
-              
-              // Vérifier après l'appel si la transition s'est bien passée
-              setTimeout(() => {
-                console.log("DEBUG: Vérification post-redirection - État actuel:", {
-                  document_location: window.location.href,
-                  timing: performance.now(),
-                  memory: window.performance?.memory ? {
-                    usedJSHeapSize: window.performance.memory.usedJSHeapSize,
-                    totalJSHeapSize: window.performance.memory.totalJSHeapSize
-                  } : "Non disponible"
-                });
-              }, 200);
-            } else {
-              console.error("DEBUG: Fonction onComplete manquante - La redirection ne peut pas être effectuée");
-            }
-          }, 500); // Délai de 500ms pour assurer la stabilité de la transition
+          // Appeler onComplete directement sans délai artificiel
+          if (onComplete) {
+            console.log("DEBUG: Exécution de la redirection vers onboarding");
+            onComplete(result.user); // Passer l'utilisateur à l'étape suivante (onboarding)
+            
+            // Vérifier après l'appel si la transition s'est bien passée
+            setTimeout(() => {
+              console.log("DEBUG: Vérification post-redirection - État actuel:", {
+                document_location: window.location.href,
+                timing: performance.now(),
+                memory: window.performance?.memory ? {
+                  usedJSHeapSize: window.performance.memory.usedJSHeapSize,
+                  totalJSHeapSize: window.performance.memory.totalJSHeapSize
+                } : "Non disponible"
+              });
+            }, 200);
+          } else {
+            console.error("DEBUG: Fonction onComplete manquante - La redirection ne peut pas être effectuée");
+          }
         } else {
           // Gérer les erreurs d'inscription ou le cas où l'utilisateur n'est pas retourné
           setError(result.message || "Une erreur s'est produite lors de l'inscription.");
