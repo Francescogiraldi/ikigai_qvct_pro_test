@@ -119,8 +119,17 @@ supabase.auth.onAuthStateChange((event, session) => {
       console.error("Erreur lors du dispatch de l'événement de connexion:", e);
     }
 
-    // Laisser Supabase gérer la session par défaut sans écriture manuelle
-    // qui pourrait provoquer des conflits
+    // SOLUTION DE SECOURS: Forcer un état dans localStorage
+    try {
+      localStorage.setItem('ikigai_lastSignIn', new Date().toISOString());
+      // Forcer également une variable globale qui sera détectable même en cas de problème de localStorage
+      window.IKIGAI_AUTH_STATE = {
+        signedIn: true,
+        timestamp: new Date().toISOString()
+      };
+    } catch (storageError) {
+      console.warn("Erreur lors de la sauvegarde de l'état d'authentification:", storageError);
+    }
   }
 });
 

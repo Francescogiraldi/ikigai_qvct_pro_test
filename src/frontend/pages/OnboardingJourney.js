@@ -26,6 +26,10 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
   // Force le rendu complet du composant après le montage
   const [isFullyMounted, setIsFullyMounted] = useState(false);
   
+  // SOLUTION DE SECOURS: Variable globale pour signaler que l'onboarding est en cours
+  // Cela permet de détecter si l'onboarding devrait être visible même après un rechargement de page
+  window.IKIGAI_ONBOARDING_ACTIVE = true;
+  
   // Effet pour vérifier le montage du composant
   useEffect(() => {
     console.log("DEBUG OnboardingJourney: Composant monté", {
@@ -317,12 +321,28 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
     setIsCompleting(true);
     
     try {
+      console.log("OnboardingJourney: Début de la soumission des réponses");
+      
+      // TRAÇAGE: pour debugging
+      console.log("OnboardingJourney: Statut des réponses avant soumission:", {
+        responseCount: Object.keys(responses).length,
+        responsesPresent: !!responses
+      });
+      
       // Forcer une récupération fraîche de la session utilisateur
+      console.log("OnboardingJourney: Récupération de la session utilisateur");
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
       if (sessionError || !sessionData.session) {
         console.error("Session invalide:", sessionError || "Aucune session trouvée");
         // Option 1: Tenter une reconnexion silencieuse
+        console.log("OnboardingJourney: Tentative de rafraîchissement de session");
         const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        console.log("OnboardingJourney: Résultat du rafraîchissement:", { 
+          success: !refreshError && !!refreshData.session,
+          error: refreshError ? refreshError.message : null
+        });
+        
         if (refreshError || !refreshData.session) {
           throw new Error("Impossible de récupérer une session valide. Veuillez vous reconnecter.");
         }

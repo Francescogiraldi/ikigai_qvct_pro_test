@@ -18,18 +18,43 @@ class StorageService {
   static async getProgress() {
     try {
       console.log("DEBUG StorageService: Début de récupération de progression");
+      
+      // IMPORTANT: Timeout de sécurité pour éviter les blocages
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Timeout lors de la récupération de l'utilisateur")), 5000)
+      );
+      
       // Vérifier si l'utilisateur est connecté
-      const { data: { user } } = await supabase.auth.getUser();
+      console.log("DEBUG StorageService: Appel à supabase.auth.getUser()");
+      
+      // Utiliser Promise.race pour éviter que l'opération getUser() ne bloque indéfiniment 
+      const userResult = await Promise.race([
+        supabase.auth.getUser(),
+        timeoutPromise
+      ]);
+      
+      const { data: { user } } = userResult;
       
       if (user) {
         console.log(`DEBUG StorageService: Utilisateur connecté - ID: ${user.id}`);
         // Récupérer les données depuis Supabase
         console.log("DEBUG StorageService: Tentative de récupération des données de progression depuis Supabase");
-        const { data, error } = await supabase
-          .from('user_progress')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
+        
+        // Nouveau timeout pour la requête de progression
+        const progressTimeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Timeout lors de la récupération des données")), 5000)
+        );
+        
+        const progressResult = await Promise.race([
+          supabase
+            .from('user_progress')
+            .select('*')
+            .eq('user_id', user.id)
+            .single(),
+          progressTimeoutPromise
+        ]);
+        
+        const { data, error } = progressResult;
         
         if (error) {
           console.warn(`DEBUG StorageService: Erreur lors de la récupération des données de progression: ${error.message}`, error);

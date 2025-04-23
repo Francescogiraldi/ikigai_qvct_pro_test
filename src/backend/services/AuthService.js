@@ -91,7 +91,10 @@ class AuthService {
   // Inscription avec email et mot de passe
   static async signUp(email, password, firstName, lastName, age, status) {
     try {
+      console.log("AuthService: Début de l'inscription", { email, firstName, lastName });
+      
       // Validation des données
+      console.log("AuthService: Validation de l'email");
       const validation = Validator.validate(
         { email },
         {
@@ -100,9 +103,11 @@ class AuthService {
       );
       
       // Validation spécifique du mot de passe avec notre fonction robuste
+      console.log("AuthService: Validation du mot de passe");
       const passwordValidation = this.validatePassword(password);
       
       if (!validation.isValid) {
+        console.warn("AuthService: Email invalide:", validation.errors);
         return {
           user: null,
           success: false,
@@ -111,11 +116,25 @@ class AuthService {
       }
       
       if (!passwordValidation.isValid) {
+        console.warn("AuthService: Mot de passe invalide:", passwordValidation.message);
         return {
           user: null,
           success: false,
           message: passwordValidation.message
         };
+      }
+      
+      // Forcer la persistance de l'état d'inscription
+      try {
+        // Stocker des informations sur l'inscription en cours
+        localStorage.setItem('ikigai_signup_pending', JSON.stringify({
+          email,
+          firstName,
+          lastName,
+          timestamp: new Date().toISOString()
+        }));
+      } catch (storageError) {
+        console.warn("Erreur lors de la sauvegarde de l'état d'inscription:", storageError);
       }
       
       const { data, error } = await supabase.auth.signUp({

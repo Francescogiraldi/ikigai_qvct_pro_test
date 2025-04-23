@@ -55,10 +55,46 @@ function App() {
     };
   }, []);
 
+  // Force isLoading à false si bloqué pendant trop longtemps
+  useEffect(() => {
+    // Si isLoading reste true pendant plus de 5 secondes, c'est probablement un bug
+    const forceLoadingTimeout = setTimeout(() => {
+      if (isLoading) {
+        console.warn("SUPER FAILSAFE: isLoading bloqué pendant >5s, force reset");
+        setIsLoading(false);
+        
+        // Vérifier si nous sommes connectés mais bloqués
+        const lastSignIn = localStorage.getItem('ikigai_lastSignIn');
+        const timeThreshold = 10 * 60 * 1000; // 10 minutes
+        const recentSignIn = lastSignIn && (new Date().getTime() - new Date(lastSignIn).getTime() < timeThreshold);
+        
+        if (recentSignIn) {
+          console.log("Détection d'une connexion récente, tentative de restauration de l'onboarding");
+          setShowSignup(false);
+          setShowWelcome(false);
+          setSelectedIsland(null);
+          setShowOnboardingAnalysis(false);
+          setShowOnboarding(true);
+        }
+      }
+    }, 5000); // 5 secondes
+    
+    return () => clearTimeout(forceLoadingTimeout);
+  }, [isLoading]); // Dépendance à isLoading seulement
+  
   // Charger les données initiales
   useEffect(() => {
     const initApp = async () => {
       try {
+        // IMPORTANT: Vérifier si un état critique a été sauvegardé en session
+        if (window.IKIGAI_AUTH_STATE && window.IKIGAI_AUTH_STATE.signedIn) {
+          console.log("RESTAURATION D'URGENCE - État authentifié détecté dans mémoire globale");
+          setIsLoading(false);
+          setShowSignup(false);
+          setShowWelcome(false);
+          setShowOnboarding(true);
+        }
+        
         // Vérifier si nous sommes sur la page de réinitialisation de mot de passe
         const pathname = window.location.pathname;
         const hash = window.location.hash;
@@ -434,6 +470,25 @@ function App() {
       selectedIsland
     });
     
+    // VÉRIFICATION CRITIQUE: Si nous sommes bloqués sur l'écran de chargement mais que l'authentification
+    // est récente, c'est probablement un bug - Vérifier plusieurs indicateurs
+    const lastSignIn = localStorage.getItem('ikigai_lastSignIn');
+    const onboardingActive = localStorage.getItem('ikigai_onboarding_active');
+    const timeThreshold = 10 * 60 * 1000; // 10 minutes
+    const recentSignIn = lastSignIn && (new Date().getTime() - new Date(lastSignIn).getTime() < timeThreshold);
+    
+    if (recentSignIn && onboardingActive === 'true') {
+      // Si nous avons détecté un état où l'onboarding devrait être affiché,
+      // forcer immédiatement un rendu d'urgence de l'onboarding
+      console.warn("RÉCUPÉRATION D'URGENCE: Redirection forcée vers onboarding");
+      setTimeout(() => {
+        setIsLoading(false);
+        setShowSignup(false);
+        setShowWelcome(false);
+        setShowOnboarding(true);
+      }, 100);
+    }
+    
     // Capture du temps de démarrage pour le debug
     const loadingStartTime = Date.now();
     
@@ -461,15 +516,41 @@ function App() {
                 if (timer) {
                   const seconds = Math.floor((Date.now() - ${loadingStartTime}) / 1000);
                   timer.textContent = seconds + 's';
-                  // Alerter si le chargement prend trop de temps
-                  if (seconds > 10) {
+                  // Alerter si le chargement prend trop de temps et appliquer une solution d'urgence
+                  if (seconds > 5) {
                     timer.style.color = 'red';
-                    console.warn("DEBUG: Temps de chargement anormalement long: " + seconds + "s");
+                    console.warn("ALERTE CRITIQUE: Temps de chargement anormalement long: " + seconds + "s");
+                    
+                    // Tenter une récupération d'urgence côté client après 10 secondes
+                    if (seconds > 10 && localStorage.getItem('ikigai_lastSignIn')) {
+                      console.error("RÉCUPÉRATION D'URGENCE JAVASCRIPT: Tentative de déblocage");
+                      // Forcer un rechargement de la page
+                      window.location.reload();
+                    }
                   }
                 }
               }, 1000);
             `
           }} />
+        </div>
+        
+        {/* Bouton d'urgence pour débloquer l'application si bloquée plus de 15 secondes */}
+        <div className="mt-6">
+          <button 
+            onClick={() => {
+              console.log("Déblocage manuel demandé par l'utilisateur");
+              setIsLoading(false);
+              const onboardingActive = localStorage.getItem('ikigai_onboarding_active');
+              if (onboardingActive === 'true') {
+                setShowOnboarding(true);
+              } else {
+                setShowWelcome(true);
+              }
+            }}
+            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 focus:outline-none"
+          >
+            Débloquer l'application
+          </button>
         </div>
       </div>
     );
@@ -505,17 +586,33 @@ function App() {
     );
   }
   
+  // Vérifier si onboarding était actif lors d'un rechargement de page
+  useEffect(() => {
+    // Si la variable globale indique que l'onboarding était actif
+    // mais que showOnboarding est false, c'est probablement un bug
+    if (window.IKIGAI_ONBOARDING_ACTIVE && !showOnboarding && !isLoading) {
+      console.warn("RESTAURATION CRITIQUE: Onboarding détecté comme actif mais non affiché");
+      setShowSignup(false);
+      setShowWelcome(false);
+      setShowOnboarding(true);
+    }
+  }, [showOnboarding, isLoading]);
+
   // PRIORITÉ 3: Si l'onboarding est actif, l'afficher
   if (showOnboarding) {
     console.log("DEBUG App.js: Rendu du composant OnboardingJourney avec priorité");
     // Forcer le rendu avec un key unique pour garantir un montage complet
     try {
+      // Marquer explicitement que l'onboarding est affiché
+      localStorage.setItem('ikigai_onboarding_active', 'true');
+      
       return (
         <OnboardingJourney 
           key={`onboarding-${Date.now()}`} // Clé unique pour forcer un nouveau montage
           onComplete={handleOnboardingComplete}
           onCancel={() => {
             console.log("DEBUG App.js: Annulation d'onboarding");
+            localStorage.removeItem('ikigai_onboarding_active');
             setShowOnboarding(false);
             setShowSignup(true);
           }}
