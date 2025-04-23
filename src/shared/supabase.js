@@ -65,6 +65,28 @@ const options = {
 // Création du client Supabase avec les options
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, options);
 
+// Ajouter ceci après l'initialisation du client Supabase
+supabase.auth.onAuthStateChange((event, session) => {
+  console.log('Événement d\'authentification:', event);
+
+  if (event === 'SIGNED_IN' && session) {
+    // Force le token JWT à être correctement enregistré et formaté
+    const { access_token, refresh_token } = session;
+
+    // Log sécurisé - confirme la présence du token sans l'afficher
+    console.log('Token JWT obtenu:', access_token ? 'Présent' : 'Absent');
+
+    // Force manuellement la mise à jour de la session
+    if (access_token) {
+      localStorage.setItem('supabase.auth.token', JSON.stringify({
+        access_token,
+        refresh_token,
+        expires_at: session.expires_at
+      }));
+    }
+  }
+});
+
 // Fonction pour préparer les en-têtes avec protection CSRF
 export const prepareCSRFHeaders = (headers = {}) => {
   return CSRFProtection.prepareHeaders(headers);

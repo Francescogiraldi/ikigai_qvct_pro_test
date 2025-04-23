@@ -287,13 +287,23 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
     setIsCompleting(true);
     
     try {
-      // Récupérer l'utilisateur actuel
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
+      // Forcer une récupération fraîche de la session utilisateur
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        console.error("Session invalide:", sessionError || "Aucune session trouvée");
+        // Option 1: Tenter une reconnexion silencieuse
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshData.session) {
+          throw new Error("Impossible de récupérer une session valide. Veuillez vous reconnecter.");
+        }
+      }
+
+      // Récupérer l'utilisateur actuel après avoir vérifié la session
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
         throw new Error("Utilisateur non authentifié");
       }
-      
+
       // Préparer les données pour l'insertion
       const responseData = {
         user_id: user.id,
