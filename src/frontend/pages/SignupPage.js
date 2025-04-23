@@ -240,12 +240,17 @@ const SignupPage = ({ onComplete, onCancel }) => {
         result = await API.auth.signUp(email, password, firstName, lastName, age, status);
 
         if (result.success && result.user) {
-          // Inscription réussie, appeler onComplete immédiatement
-          console.log("Inscription réussie (redirection immédiate vers onboarding), appel de onComplete avec l'utilisateur:", result.user);
+          // Inscription réussie, afficher un message de succès et préparer la redirection
+          console.log("Inscription réussie, préparation de la redirection vers onboarding");
           setSuccessMessage(result.message || 'Inscription réussie!'); // Afficher un message de succès
-          if (onComplete) {
-            onComplete(result.user); // Passer l'utilisateur à l'étape suivante (onboarding)
-          }
+          
+          // Forcer un délai avant la redirection pour assurer que les états sont correctement mis à jour
+          setTimeout(() => {
+            if (onComplete) {
+              console.log("Redirection de la redirection vers onboarding");
+              onComplete(result.user); // Passer l'utilisateur à l'étape suivante (onboarding)
+            }
+          }, 500); // Délai de 500ms pour assurer la stabilité de la transition
         } else {
           // Gérer les erreurs d'inscription ou le cas où l'utilisateur n'est pas retourné
           setError(result.message || "Une erreur s'est produite lors de l'inscription.");

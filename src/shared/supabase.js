@@ -28,6 +28,10 @@ const options = {
     persistSession: true,
     detectSessionInUrl: true
   },
+  storage: {
+    // Ajouter ces options pour améliorer la gestion des redirections
+    storageKey: 'supabase.auth.token', // S'assurer que la clé de stockage est explicite
+  },
   global: {
     headers: {
       // Ajout explicite de l'API key comme header

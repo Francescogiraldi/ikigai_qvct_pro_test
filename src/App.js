@@ -469,48 +469,64 @@ function App() {
   if (showSignup) {
     return (
       <SignupPage
-        onComplete={async () => {
-          // Récupérer les données de progression directement depuis l'API pour avoir les informations les plus à jour
-          const userProgress = await API.progress.getProgress();
-          
-          // Récupérer l'état d'onboarding depuis localStorage ou le calculer depuis userProgress
-          let isOnboardingCompleted = localStorage.getItem('onboardingCompleted') === 'true';
-          
-          // Si la valeur n'est pas dans localStorage, vérifier dans les données de progression
-          if (localStorage.getItem('onboardingCompleted') === null) {
-            isOnboardingCompleted = userProgress.moduleResponses && 
-                                     userProgress.moduleResponses.onboarding && 
-                                     userProgress.moduleResponses.onboarding.completedAt;
-          }
-          
-          // Supprimer l'item du localStorage après utilisation
-          localStorage.removeItem('onboardingCompleted');
-          
-          console.log("Après connexion - État onboarding:", isOnboardingCompleted ? "Complété" : "Non complété");
-          console.log("Données onboarding:", userProgress.moduleResponses?.onboarding);
-          
-          setShowSignup(false);
-          
-          // Vérifier que userProgress est bien défini avant d'utiliser ses propriétés
-          if (userProgress && Object.keys(userProgress).length > 0) {
-            // Rediriger vers l'onboarding uniquement si l'utilisateur ne l'a pas déjà complété
-            if (isOnboardingCompleted) {
-              // Si l'onboarding est déjà complété, afficher directement la page principale
-              setShowOnboarding(false);
-              console.log("Redirection vers la page principale - Onboarding déjà complété");
-            } else {
-              // Sinon, afficher l'onboarding
-              setShowOnboarding(true);
-              console.log("Redirection vers l'onboarding - Onboarding non complété");
+        onComplete={async (userData) => {
+          try {
+            console.log("Démarrage de la redirection après inscription/connexion");
+            
+            // D'abord effacer l'état de connexion pour garantir que nous sommes bien en transition
+            setShowSignup(false);
+            setIsLoading(true); // Ajouter un état de chargement pendant la transition
+            
+            // Attendre un court instant pour laisser React mettre à jour les états
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Récupérer les données de progression
+            console.log("Récupération des données de progression");
+            let userProgress;
+            try {
+              userProgress = await API.progress.getProgress();
+              console.log("Données de progression récupérées:", userProgress);
+            } catch (progressError) {
+              console.error("Erreur lors de la récupération des données de progression:", progressError);
+              userProgress = {}; // En cas d'erreur, initialiser un objet vide
             }
-          } else {
-            // En cas de données manquantes, afficher l'onboarding par défaut
-            setShowOnboarding(true);
-            console.log("Redirection vers l'onboarding - Données de progression indisponibles");
-          }
+            
+            // Déterminer si l'onboarding est complété
+            let isOnboardingCompleted = localStorage.getItem('onboardingCompleted') === 'true';
+            
+            if (localStorage.getItem('onboardingCompleted') === null && userProgress) {
+              isOnboardingCompleted = !!(userProgress.moduleResponses && 
+                                       userProgress.moduleResponses.onboarding && 
+                                       userProgress.moduleResponses.onboarding.completedAt);
+            }
+            
+            console.log("État d'onboarding:", isOnboardingCompleted ? "Complété" : "Non complété");
+            
+            // Toujours effacer l'item du localStorage après utilisation
+            localStorage.removeItem('onboardingCompleted');
           
-          // Nettoyer localStorage si présent
-          localStorage.removeItem('onboardingCompleted');
+            // Mettre à jour les états pour la redirection
+            if (isOnboardingCompleted) {
+              // Si l'onboarding est déjà complété, aller à la page principale
+              console.log("Redirection vers la page principale");
+              setShowOnboarding(false);
+              setShowOnboardingAnalysis(false);
+            } else {
+              // Sinon, aller à l'onboarding
+              console.log("Redirection vers l'onboarding");
+              setShowOnboarding(true);
+            }
+            
+            // Terminer le chargement et assurer que la transition est complète
+            setIsLoading(false);
+            
+          } catch (error) {
+            console.error("Erreur lors de la redirection après authentification:", error);
+            // En cas d'erreur, afficher l'onboarding par défaut
+            setShowSignup(false);
+            setShowOnboarding(true);
+            setIsLoading(false);
+          }
         }}
         onCancel={() => {
           setShowSignup(false);

@@ -131,19 +131,16 @@ class AuthService {
         }
       });
 
-      // Ajouter la vérification pour la confirmation d'email
+      // La vérification d'email a été supprimée
       if (!error && data && data.user) {
-        // Vérifier si l'utilisateur doit confirmer son email
-        if (data.user.identities && data.user.identities.length > 0 && !data.user.email_confirmed_at) {
-          // Envoyer l'email de bienvenue même si la confirmation est requise
-          await sendWelcomeEmail(email, data, 'email');
-          return {
-            user: data.user,
-            success: true,
-            message: 'Inscription réussie! Veuillez vérifier votre email pour confirmer votre compte avant de vous connecter.',
-            requiresEmailConfirmation: true
-          };
-        }
+        // Envoyer l'email de bienvenue
+        await sendWelcomeEmail(email, data, 'email');
+        return {
+          user: data.user,
+          success: true,
+          message: 'Inscription réussie!',
+          requiresEmailConfirmation: false
+        };
       }
       
       // Vérifier s'il y a une erreur
