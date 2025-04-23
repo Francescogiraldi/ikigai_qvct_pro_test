@@ -36,6 +36,25 @@ function App() {
   const [onboardingResponses, setOnboardingResponses] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Écouter les événements d'authentification explicites
+  useEffect(() => {
+    const handleAuthEvent = (event) => {
+      console.log("Événement d'authentification détecté dans App.js:", event.detail);
+      
+      // Forcer une mise à jour d'état pour garantir que l'interface s'actualise
+      setIsLoading(prevState => {
+        console.log("Réinitialisation forcée des états après authentification");
+        return prevState; // Ne pas modifier l'état directement pour éviter un re-rendu prématuré
+      });
+    };
+    
+    window.addEventListener('supabase:auth:signIn', handleAuthEvent);
+    
+    return () => {
+      window.removeEventListener('supabase:auth:signIn', handleAuthEvent);
+    };
+  }, []);
+
   // Charger les données initiales
   useEffect(() => {
     const initApp = async () => {
@@ -488,10 +507,12 @@ function App() {
   
   // PRIORITÉ 3: Si l'onboarding est actif, l'afficher
   if (showOnboarding) {
-    console.log("DEBUG App.js: Rendu du composant OnboardingJourney");
+    console.log("DEBUG App.js: Rendu du composant OnboardingJourney avec priorité");
+    // Forcer le rendu avec un key unique pour garantir un montage complet
     try {
       return (
         <OnboardingJourney 
+          key={`onboarding-${Date.now()}`} // Clé unique pour forcer un nouveau montage
           onComplete={handleOnboardingComplete}
           onCancel={() => {
             console.log("DEBUG App.js: Annulation d'onboarding");
@@ -623,27 +644,19 @@ function App() {
               // Sinon, aller à l'onboarding
               console.log("Redirection vers l'onboarding");
               
-              // IMPORTANT: Désactiver tous les autres états avant d'activer l'onboarding
-              // pour éviter les conflits de rendu
+              console.log("CHANGEMENT CRITIQUE: Simplification du flux de redirection");
+              
+              // NOUVEAU FLUX DE REDIRECTION: D'abord désactiver le chargement
+              setIsLoading(false);
+              
+              // Puis définir tous les états nécessaires en une fois
               setShowSignup(false);
               setShowWelcome(false);
               setSelectedIsland(null);
               setShowOnboardingAnalysis(false);
-              
-              // Attendre que React mette à jour les états
-              await new Promise(resolve => setTimeout(resolve, 50));
-              
-              // Ensuite seulement activer l'onboarding
               setShowOnboarding(true);
               
-              // Log de debug pour vérifier l'état après mise à jour
-              console.log("DEBUG App.js: État d'onboarding défini sur true, vérification...");
-              
-              // IMPORTANT: S'assurer que isLoading est passé à false APRÈS le changement d'état
-              setTimeout(() => {
-                setIsLoading(false);
-                console.log("DEBUG App.js: isLoading défini à false après activation de l'onboarding");
-              }, 100);
+              console.log("DEBUG App.js: Tous les états définis: isLoading=false, showOnboarding=true");
             }
             
             // Vérifier les états après le rendu

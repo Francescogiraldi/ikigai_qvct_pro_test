@@ -108,14 +108,19 @@ supabase.auth.onAuthStateChange((event, session) => {
     // Log sécurisé - confirme la présence du token sans l'afficher
     console.log('Token JWT obtenu:', access_token ? 'Présent' : 'Absent');
 
-    // Force manuellement la mise à jour de la session
-    if (access_token) {
-      localStorage.setItem('supabase.auth.token', JSON.stringify({
-        access_token,
-        refresh_token,
-        expires_at: session.expires_at
-      }));
+    // IMPORTANT - déclencher un événement pour signaler la connexion
+    try {
+      const authEvent = new CustomEvent('supabase:auth:signIn', {
+        detail: { success: true, timestamp: new Date().toISOString() }
+      });
+      window.dispatchEvent(authEvent);
+      console.log("Événement de connexion dispatché");
+    } catch (e) {
+      console.error("Erreur lors du dispatch de l'événement de connexion:", e);
     }
+
+    // Laisser Supabase gérer la session par défaut sans écriture manuelle
+    // qui pourrait provoquer des conflits
   }
 });
 
