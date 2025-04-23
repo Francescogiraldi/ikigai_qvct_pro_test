@@ -405,6 +405,19 @@ function App() {
   
   // Affichage pendant le chargement
   if (isLoading) {
+    // Log pour debugging
+    console.log("DEBUG App.js: Affichage de l'écran de chargement", {
+      timestamp: new Date().toISOString(),
+      showWelcome, 
+      showSignup, 
+      showOnboarding, 
+      showOnboardingAnalysis,
+      selectedIsland
+    });
+    
+    // Capture du temps de démarrage pour le debug
+    const loadingStartTime = Date.now();
+    
     return (
       <div className="flex items-center justify-center h-screen flex-col bg-gray-50">
         <div className="flex items-center">
@@ -418,6 +431,27 @@ function App() {
           <div className="absolute top-0 left-0 w-full h-full rounded-full border-4 border-t-transparent border-l-transparent animate-spin border-blue-500"></div>
         </div>
         <span className="mt-4 text-gray-600">Chargement...</span>
+        <div className="mt-2 text-xs text-gray-400">
+          {/* Timer pour afficher le temps d'attente */}
+          <span id="loading-timer">{Math.floor((Date.now() - loadingStartTime) / 1000)}s</span>
+          <script dangerouslySetInnerHTML={{
+            __html: `
+              // Script pour mettre à jour le compteur toutes les secondes
+              setInterval(() => {
+                const timer = document.getElementById('loading-timer');
+                if (timer) {
+                  const seconds = Math.floor((Date.now() - ${loadingStartTime}) / 1000);
+                  timer.textContent = seconds + 's';
+                  // Alerter si le chargement prend trop de temps
+                  if (seconds > 10) {
+                    timer.style.color = 'red';
+                    console.warn("DEBUG: Temps de chargement anormalement long: " + seconds + "s");
+                  }
+                }
+              }, 1000);
+            `
+          }} />
+        </div>
       </div>
     );
   }
@@ -454,15 +488,39 @@ function App() {
   
   // PRIORITÉ 3: Si l'onboarding est actif, l'afficher
   if (showOnboarding) {
-    return (
-      <OnboardingJourney 
-        onComplete={handleOnboardingComplete}
-        onCancel={() => {
-          setShowOnboarding(false);
-          setShowSignup(true);
-        }}
-      />
-    );
+    console.log("DEBUG App.js: Rendu du composant OnboardingJourney");
+    try {
+      return (
+        <OnboardingJourney 
+          onComplete={handleOnboardingComplete}
+          onCancel={() => {
+            console.log("DEBUG App.js: Annulation d'onboarding");
+            setShowOnboarding(false);
+            setShowSignup(true);
+          }}
+        />
+      );
+    } catch (error) {
+      console.error("DEBUG App.js: Erreur lors du rendu de OnboardingJourney:", error);
+      // Fallback en cas d'erreur
+      return (
+        <div className="flex items-center justify-center h-screen flex-col bg-red-50">
+          <div className="p-4 bg-white rounded-lg shadow-lg max-w-md text-center">
+            <h2 className="text-xl font-bold text-red-600 mb-2">Erreur lors du chargement</h2>
+            <p className="text-gray-600 mb-4">Une erreur s'est produite lors du chargement du parcours d'onboarding.</p>
+            <button 
+              onClick={() => {
+                console.log("DEBUG App.js: Tentative de rechargement");
+                window.location.reload();
+              }}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Recharger l'application
+            </button>
+          </div>
+        </div>
+      );
+    }
   }
   
   // PRIORITÉ 4: Si la page d'inscription est active, l'afficher
@@ -471,24 +529,59 @@ function App() {
       <SignupPage
         onComplete={async (userData) => {
           try {
-            console.log("Démarrage de la redirection après inscription/connexion");
+            console.log("Démarrage de la redirection après inscription/connexion", {
+              userData: userData ? {
+                id: userData.id,
+                email: userData.email,
+                timestamp: new Date().toISOString()
+              } : "Données utilisateur manquantes"
+            });
             
             // D'abord effacer l'état de connexion pour garantir que nous sommes bien en transition
             setShowSignup(false);
             setIsLoading(true); // Ajouter un état de chargement pendant la transition
+            console.log("DEBUG App.js: États mis à jour - showSignup=false, isLoading=true");
             
             // Attendre un court instant pour laisser React mettre à jour les états
             await new Promise(resolve => setTimeout(resolve, 100));
             
             // Récupérer les données de progression
-            console.log("Récupération des données de progression");
+            console.log("DEBUG App.js: Récupération des données de progression");
             let userProgress;
+            let progressError = null;
+            
             try {
               userProgress = await API.progress.getProgress();
-              console.log("Données de progression récupérées:", userProgress);
-            } catch (progressError) {
-              console.error("Erreur lors de la récupération des données de progression:", progressError);
-              userProgress = {}; // En cas d'erreur, initialiser un objet vide
+              console.log("DEBUG App.js: Données de progression récupérées:", userProgress);
+            } catch (error) {
+              progressError = error;
+              console.error("DEBUG App.js: Erreur lors de la récupération des données de progression:", error);
+              
+              // Tentative de récupération avec un délai supplémentaire
+              try {
+                console.log("DEBUG App.js: Nouvelle tentative de récupération après délai...");
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                userProgress = await API.progress.getProgress();
+                console.log("DEBUG App.js: Nouvelle tentative réussie, données récupérées:", userProgress);
+              } catch (retryError) {
+                console.error("DEBUG App.js: Échec de la nouvelle tentative:", retryError);
+                // Initialiser avec un objet vide en dernier recours
+                userProgress = {}; 
+              }
+            }
+            
+            // Si on a une erreur et un objet vide, utiliser une structure minimale
+            if (progressError && (!userProgress || Object.keys(userProgress).length === 0)) {
+              console.warn("DEBUG App.js: Utilisation d'une structure minimale pour un nouvel utilisateur");
+              userProgress = {
+                totalPoints: 0,
+                streakDays: 0,
+                lastActive: new Date().toISOString(),
+                completedModules: {},
+                completedChallenges: {},
+                moduleResponses: {},
+                badges: []
+              };
             }
             
             // Déterminer si l'onboarding est complété
@@ -505,8 +598,23 @@ function App() {
             // Toujours effacer l'item du localStorage après utilisation
             localStorage.removeItem('onboardingCompleted');
           
+            // Pour un nouvel utilisateur, forcer l'onboarding quelle que soit la valeur
+            // Pour un utilisateur existant, vérifier dans les données de progression
+            const forceOnboarding = userData && userData.app_metadata?.provider === 'email' && 
+                                    (!userData.created_at || 
+                                    new Date(userData.created_at).getTime() > (Date.now() - 5 * 60 * 1000)); // 5 minutes
+            
+            console.log("DEBUG App.js: Décision de redirection", {
+              isOnboardingCompleted,
+              forceOnboarding,
+              userData: userData ? {
+                provider: userData.app_metadata?.provider,
+                created_at: userData.created_at
+              } : null
+            });
+            
             // Mettre à jour les états pour la redirection
-            if (isOnboardingCompleted) {
+            if (isOnboardingCompleted && !forceOnboarding) {
               // Si l'onboarding est déjà complété, aller à la page principale
               console.log("Redirection vers la page principale");
               setShowOnboarding(false);
@@ -514,11 +622,38 @@ function App() {
             } else {
               // Sinon, aller à l'onboarding
               console.log("Redirection vers l'onboarding");
+              
+              // IMPORTANT: Désactiver tous les autres états avant d'activer l'onboarding
+              // pour éviter les conflits de rendu
+              setShowSignup(false);
+              setShowWelcome(false);
+              setSelectedIsland(null);
+              setShowOnboardingAnalysis(false);
+              
+              // Attendre que React mette à jour les états
+              await new Promise(resolve => setTimeout(resolve, 50));
+              
+              // Ensuite seulement activer l'onboarding
               setShowOnboarding(true);
+              
+              // Log de debug pour vérifier l'état après mise à jour
+              console.log("DEBUG App.js: État d'onboarding défini sur true, vérification...");
             }
             
             // Terminer le chargement et assurer que la transition est complète
             setIsLoading(false);
+            
+            // Vérifier les états après le rendu
+            setTimeout(() => {
+              console.log("DEBUG App.js: États finaux après transition", {
+                showOnboarding: showOnboarding,
+                showSignup: showSignup,
+                isLoading: isLoading,
+                showOnboardingAnalysis: showOnboardingAnalysis,
+                isOnboardingCompleted: isOnboardingCompleted,
+                timestamp: new Date().toISOString()
+              });
+            }, 100);
             
           } catch (error) {
             console.error("Erreur lors de la redirection après authentification:", error);

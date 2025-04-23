@@ -12,10 +12,31 @@ import '../styles/onboarding.css';
 
 // Composant pour le parcours d'onboarding IKIGAI
 const OnboardingJourney = ({ onComplete, onCancel }) => {
+  console.log("DEBUG OnboardingJourney: Initialisation du composant", {
+    hasOnCompleteCallback: !!onComplete,
+    hasOnCancelCallback: !!onCancel,
+    timestamp: new Date().toISOString()
+  });
+
   // État pour suivre la session et la question actuelles
   const [currentSession, setCurrentSession] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [responses, setResponses] = useState({});
+  
+  // Effet pour vérifier le montage du composant
+  useEffect(() => {
+    console.log("DEBUG OnboardingJourney: Composant monté", {
+      session: currentSession,
+      question: currentQuestion,
+      timestamp: new Date().toISOString()
+    });
+    
+    return () => {
+      console.log("DEBUG OnboardingJourney: Composant démonté", {
+        timestamp: new Date().toISOString()
+      });
+    };
+  }, []);
   
   // Définition des sessions et questions avec useMemo
   const sessions = React.useMemo(() => [

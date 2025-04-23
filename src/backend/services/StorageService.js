@@ -17,28 +17,48 @@ class StorageService {
   // Récupérer la progression depuis Supabase
   static async getProgress() {
     try {
+      console.log("DEBUG StorageService: Début de récupération de progression");
       // Vérifier si l'utilisateur est connecté
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
+        console.log(`DEBUG StorageService: Utilisateur connecté - ID: ${user.id}`);
         // Récupérer les données depuis Supabase
+        console.log("DEBUG StorageService: Tentative de récupération des données de progression depuis Supabase");
         const { data, error } = await supabase
           .from('user_progress')
           .select('*')
           .eq('user_id', user.id)
           .single();
         
-        if (error) throw error;
+        if (error) {
+          console.warn(`DEBUG StorageService: Erreur lors de la récupération des données de progression: ${error.message}`, error);
+          throw error;
+        }
         
         if (data) {
-          return JSON.parse(data.progress_data);
+          console.log("DEBUG StorageService: Données de progression trouvées dans Supabase");
+          try {
+            const progressData = JSON.parse(data.progress_data);
+            console.log("DEBUG StorageService: Parsing JSON réussi");
+            return progressData;
+          } catch (parseError) {
+            console.error("DEBUG StorageService: Erreur de parsing JSON:", parseError);
+            throw parseError;
+          }
+        } else {
+          console.log("DEBUG StorageService: Aucune donnée trouvée dans Supabase pour cet utilisateur");
         }
+      } else {
+        console.log("DEBUG StorageService: Aucun utilisateur connecté");
       }
       
       // Si pas d'utilisateur connecté ou pas de données, utiliser localStorage
+      console.log("DEBUG StorageService: Fallback vers le stockage local");
       return this.getProgressSync();
     } catch (error) {
-      console.error('Erreur lors de la récupération des données:', error);
+      console.error('DEBUG StorageService: Erreur générale lors de la récupération des données:', error);
+      console.log("DEBUG StorageService: Fallback vers le stockage local après erreur");
       return this.getProgressSync();
     }
   }

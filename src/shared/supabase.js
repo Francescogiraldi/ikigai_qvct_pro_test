@@ -7,15 +7,26 @@ const getSupabaseConfig = () => {
   const key = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
   // Log sécurisé - sans exposer les valeurs
-  console.log("Configuration Supabase: URL et clé " + 
-    (url && key ? "définies" : "manquantes"));
+  console.log("DEBUG Supabase: Vérification de la configuration", {
+    urlDefined: !!url,
+    keyDefined: !!key,
+    timestamp: new Date().toISOString()
+  });
 
   // Si les variables d'environnement ne sont pas définies, bloquer l'application
   if (!url || !key) {
+    // Erreur détaillée pour faciliter le débogage
+    console.error("DEBUG Supabase: Variables d'environnement manquantes", {
+      REACT_APP_SUPABASE_URL_defined: !!process.env.REACT_APP_SUPABASE_URL,
+      REACT_APP_SUPABASE_ANON_KEY_defined: !!process.env.REACT_APP_SUPABASE_ANON_KEY,
+      env_keys: Object.keys(process.env).filter(key => key.startsWith('REACT_APP_')).join(', ')
+    });
+    
     // Bloquer l'application si les variables sont manquantes
     throw new Error('Variables d\'environnement Supabase manquantes. L\'application ne peut pas fonctionner sans elles.');
   }
 
+  console.log("DEBUG Supabase: Configuration réussie");
   return { supabaseUrl: url, supabaseAnonKey: key };
 };
 
