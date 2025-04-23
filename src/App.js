@@ -36,7 +36,7 @@ function App() {
   const [onboardingResponses, setOnboardingResponses] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Écouter les événements d'authentification explicites
+  // Écouter les événements d'authentification et de transition
   useEffect(() => {
     const handleAuthEvent = (event) => {
       console.log("Événement d'authentification détecté dans App.js:", event.detail);
@@ -48,12 +48,43 @@ function App() {
       });
     };
     
+    // Nouvel écouteur pour démarrer l'onboarding
+    const handleStartOnboarding = (event) => {
+      console.log("Événement de démarrage d'onboarding détecté:", event.detail);
+      
+      // Forcer la séquence de redirection complète
+      setIsLoading(false);
+      setShowSignup(false);
+      setShowWelcome(false);
+      setSelectedIsland(null);
+      setShowOnboardingAnalysis(false);
+      setShowOnboarding(true);
+      
+      console.log("Transition vers onboarding forcée par événement");
+    };
+    
+    // Écouteur pour forcer l'onboarding si aucune autre vue n'est active
+    const handleForceOnboarding = () => {
+      console.log("RÉCUPÉRATION CRITIQUE: Forçage d'onboarding demandé");
+      
+      if (!showOnboarding && !showOnboardingAnalysis && !selectedIsland) {
+        setIsLoading(false);
+        setShowSignup(false);
+        setShowWelcome(false);
+        setShowOnboarding(true);
+      }
+    };
+    
     window.addEventListener('supabase:auth:signIn', handleAuthEvent);
+    window.addEventListener('ikigai:startOnboarding', handleStartOnboarding);
+    window.addEventListener('ikigai:forceOnboarding', handleForceOnboarding);
     
     return () => {
       window.removeEventListener('supabase:auth:signIn', handleAuthEvent);
+      window.removeEventListener('ikigai:startOnboarding', handleStartOnboarding);
+      window.removeEventListener('ikigai:forceOnboarding', handleForceOnboarding);
     };
-  }, []);
+  }, [showOnboarding, showOnboardingAnalysis, selectedIsland]);
 
   // Force isLoading à false si bloqué pendant trop longtemps
   useEffect(() => {
@@ -83,6 +114,18 @@ function App() {
   }, [isLoading]); // Dépendance à isLoading seulement
   
   // Charger les données initiales
+  // Vérifier si onboarding était actif lors d'un rechargement de page
+  useEffect(() => {
+    // Si la variable globale indique que l'onboarding était actif
+    // mais que showOnboarding est false, c'est probablement un bug
+    if (window.IKIGAI_ONBOARDING_ACTIVE && !showOnboarding && !isLoading) {
+      console.warn("RESTAURATION CRITIQUE: Onboarding détecté comme actif mais non affiché");
+      setShowSignup(false);
+      setShowWelcome(false);
+      setShowOnboarding(true);
+    }
+  }, [showOnboarding, isLoading]);
+  
   useEffect(() => {
     const initApp = async () => {
       try {
@@ -362,29 +405,46 @@ function App() {
     try {
       console.log("App: Complétion de l'onboarding avec réponses:", responses);
       
+      // Effacer les flags de visibilité de l'onboarding
+      window.IKIGAI_ONBOARDING_VISIBLE = false;
+      localStorage.removeItem('ikigai_onboarding_visible');
+      
       // Ajouter un timestamp de complétion si non présent
       const responsesWithTimestamp = {
         ...responses,
         completedAt: responses.completedAt || new Date().toISOString()
       };
       
-      // Désactiver TOUS les autres écrans d'abord
+      // IMPORTANT: Désactiver TOUS les autres écrans en une seule opération atomique
+      console.log("Désactivation de tous les écrans avant l'analyse");
+      
+      // Désactiver tout en une fois pour éviter les états transitoires
+      setIsLoading(false);
       setShowWelcome(false);
       setShowSignup(false);
       setShowOnboarding(false);
       setSelectedIsland(null);
-      setIsLoading(false);
+      
+      // Attendre un instant pour laisser React mettre à jour les états
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       // IMPORTANT: Activer la page d'analyse AVANT de stocker les réponses
-      // pour éviter les problèmes de timing avec le rendu conditionnel
-      setShowOnboardingAnalysis(true);
       console.log("Activation de la page d'analyse d'onboarding");
+      setShowOnboardingAnalysis(true);
+      
+      // Attendre un autre instant pour confirmer que l'état est mis à jour
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       // Ensuite seulement stocker les réponses
       setOnboardingResponses(responsesWithTimestamp);
       
       // Marquer l'onboarding comme complété dans localStorage pour référence future
       localStorage.setItem('onboardingCompleted', 'true');
+      // Continuer à marquer que le flux d'onboarding est actif
+      localStorage.setItem('ikigai_onboarding_active', 'true');
+      
+      // Signal global pour indiquer que nous sommes en phase d'analyse
+      window.IKIGAI_ANALYSIS_ACTIVE = true;
       
       console.log("Activation de la page d'analyse complétée. État:", {
         showOnboardingAnalysis: true,
@@ -392,8 +452,18 @@ function App() {
         showSignup: false,
         showWelcome: false,
         isLoading: false,
-        responsesStored: !!responsesWithTimestamp
+        responsesStored: !!responsesWithTimestamp,
+        timestamp: new Date().toISOString()
       });
+      
+      // Mettre en place un mécanisme de secours si la page d'analyse ne s'affiche pas
+      setTimeout(() => {
+        if (!document.querySelector('.analysis-page-container')) {
+          console.warn("RÉCUPÉRATION CRITIQUE: Page d'analyse non détectée après 500ms");
+          // Forcer à nouveau l'état
+          setShowOnboardingAnalysis(true);
+        }
+      }, 500);
       
     } catch (error) {
       console.error("Erreur lors de la complétion de l'onboarding:", error);
@@ -408,6 +478,18 @@ function App() {
   const handleAnalysisComplete = async (responses) => {
     try {
       console.log("App: Analyse terminée pour les réponses:", responses);
+      
+      // Nettoyer les flags globaux et localStorage
+      window.IKIGAI_ONBOARDING_ACTIVE = false;
+      window.IKIGAI_ANALYSIS_ACTIVE = false;
+      window.IKIGAI_ONBOARDING_VISIBLE = false;
+      
+      localStorage.removeItem('ikigai_onboarding_active');
+      localStorage.removeItem('ikigai_onboarding_visible');
+      localStorage.removeItem('ikigai_analysis_active');
+      
+      // Marquer explicitement l'onboarding comme complété
+      localStorage.setItem('onboardingCompleted', 'true');
       
       // Ajouter des points pour avoir complété l'onboarding
       const updatedProgress = {...progress};
@@ -425,7 +507,9 @@ function App() {
         completedAt: responses.completedAt || new Date().toISOString()
       };
       
+      // Sauvegarder les données de progression avant de changer l'interface
       try {
+        console.log("Sauvegarde de la progression avec onboarding complété");
         await API.progress.saveProgress(updatedProgress);
         setProgress(updatedProgress);
       } catch (saveError) {
@@ -433,28 +517,60 @@ function App() {
         // Continuer malgré l'erreur
       }
       
-      // Fermer la page d'analyse et passer à l'application principale
+      // TRANSITION ATOMIQUE: réinitialiser tous les états en une fois
+      console.log("Fermeture de la page d'analyse et transition vers l'application principale");
+      
+      // Désactiver tous les écrans intermédiaires
       setShowOnboardingAnalysis(false);
       setOnboardingResponses(null);
-      
-      // S'assurer que tous les autres écrans sont désactivés
       setShowWelcome(false);
       setShowSignup(false);
       setShowOnboarding(false);
+      setIsLoading(false);
       
-      // Léger délai pour laisser React mettre à jour les états
+      // Attendre que React mette à jour les états
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Vérification de sécurité
+      console.log("Vérification de l'état après transition:", {
+        showOnboardingAnalysis: false,
+        showOnboarding: false,
+        showWelcome: false,
+        showSignup: false,
+        isLoading: false,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Mécanisme de secours pour s'assurer que l'application principale s'affiche
       setTimeout(() => {
-        console.log("Transition vers la page principale terminée");
-      }, 100);
+        if (showOnboardingAnalysis || showOnboarding || showWelcome || showSignup || isLoading) {
+          console.warn("RÉCUPÉRATION CRITIQUE: L'interface n'a pas transitionné correctement");
+          // Forcer une dernière fois les états
+          setShowOnboardingAnalysis(false);
+          setShowWelcome(false);
+          setShowSignup(false);
+          setShowOnboarding(false);
+          setIsLoading(false);
+        } else {
+          console.log("Transition vers la page principale réussie");
+        }
+      }, 300);
       
     } catch (error) {
       console.error("Erreur lors de la finalisation de l'analyse:", error);
-      // En cas d'erreur, continuer vers la page principale
+      // En cas d'erreur, continuer vers la page principale avec une approche plus prudente
+      
+      // Désactiver tous les écrans intermédiaires dans l'ordre
+      setIsLoading(false);
       setShowOnboardingAnalysis(false);
       setOnboardingResponses(null);
-      setShowWelcome(false);
-      setShowSignup(false);
-      setShowOnboarding(false);
+      
+      // Puis attendre et désactiver les autres écrans
+      setTimeout(() => {
+        setShowWelcome(false);
+        setShowSignup(false);
+        setShowOnboarding(false);
+      }, 100);
     }
   };
   
@@ -572,18 +688,6 @@ function App() {
       />
     );
   }
-  
-  // Vérifier si onboarding était actif lors d'un rechargement de page
-  useEffect(() => {
-    // Si la variable globale indique que l'onboarding était actif
-    // mais que showOnboarding est false, c'est probablement un bug
-    if (window.IKIGAI_ONBOARDING_ACTIVE && !showOnboarding && !isLoading) {
-      console.warn("RESTAURATION CRITIQUE: Onboarding détecté comme actif mais non affiché");
-      setShowSignup(false);
-      setShowWelcome(false);
-      setShowOnboarding(true);
-    }
-  }, [showOnboarding, isLoading]);
   
   // PRIORITÉ 2: Si une île est sélectionnée, afficher sa vue
   if (selectedIsland) {

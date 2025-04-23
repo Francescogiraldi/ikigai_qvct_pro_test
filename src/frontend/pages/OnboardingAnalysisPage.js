@@ -197,8 +197,27 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
     );
   };
 
+  // Notifier au montage que la page d'analyse est visible
+  useEffect(() => {
+    console.log("OnboardingAnalysisPage: Composant monté et visible");
+    window.IKIGAI_ANALYSIS_ACTIVE = true;
+    
+    try {
+      localStorage.setItem('ikigai_analysis_active', 'true');
+      localStorage.setItem('ikigai_analysis_timestamp', new Date().toISOString());
+    } catch (e) {
+      console.warn("Impossible d'enregistrer l'état d'analyse dans localStorage:", e);
+    }
+    
+    return () => {
+      console.log("OnboardingAnalysisPage: Composant démonté");
+      window.IKIGAI_ANALYSIS_ACTIVE = false;
+      localStorage.removeItem('ikigai_analysis_active');
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-white to-blue-50 z-50">
+    <div className="fixed inset-0 flex items-center justify-center bg-gradient-to-b from-white to-blue-50 z-50 analysis-page-container">
       {/* Arrière-plan avec particules */}
       {showParticles && <FloatingParticles />}
       

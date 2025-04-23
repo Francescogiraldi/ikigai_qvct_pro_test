@@ -253,21 +253,44 @@ const SignupPage = ({ onComplete, onCancel }) => {
             success: result.success
           });
           
+          // Activer explicitement le flag d'onboarding avant la redirection
+          localStorage.setItem('ikigai_onboarding_active', 'true');
+          window.IKIGAI_ONBOARDING_ACTIVE = true;
+          
           // Appeler onComplete directement sans délai artificiel
           if (onComplete) {
             console.log("DEBUG: Exécution de la redirection vers onboarding");
+            
+            // Signaler explicitement que l'onboarding est requis
+            localStorage.setItem('onboardingCompleted', 'false');
+            
+            // Créer un événement personnalisé pour forcer la transition
+            const event = new CustomEvent('ikigai:startOnboarding', {
+              detail: { userId: result.user.id, timestamp: new Date().toISOString() }
+            });
+            window.dispatchEvent(event);
+            
+            // IMPORTANT: Appeler onComplete après avoir préparé tous les flags
             onComplete(result.user); // Passer l'utilisateur à l'étape suivante (onboarding)
             
             // Vérifier après l'appel si la transition s'est bien passée
             setTimeout(() => {
               console.log("DEBUG: Vérification post-redirection - État actuel:", {
+                onboardingActive: window.IKIGAI_ONBOARDING_ACTIVE,
+                localStorageFlags: {
+                  ikigai_onboarding_active: localStorage.getItem('ikigai_onboarding_active'),
+                  onboardingCompleted: localStorage.getItem('onboardingCompleted')
+                },
                 document_location: window.location.href,
-                timing: performance.now(),
-                memory: window.performance?.memory ? {
-                  usedJSHeapSize: window.performance.memory.usedJSHeapSize,
-                  totalJSHeapSize: window.performance.memory.totalJSHeapSize
-                } : "Non disponible"
+                timing: performance.now()
               });
+              
+              // Si l'onboarding n'est pas visible après un délai, forcer la redirection
+              if (!window.IKIGAI_ONBOARDING_VISIBLE) {
+                console.warn("RÉCUPÉRATION CRITIQUE: L'onboarding n'est pas visible après 200ms");
+                // Dispatcher un nouvel événement pour forcer l'affichage
+                window.dispatchEvent(new CustomEvent('ikigai:forceOnboarding'));
+              }
             }, 200);
           } else {
             console.error("DEBUG: Fonction onComplete manquante - La redirection ne peut pas être effectuée");

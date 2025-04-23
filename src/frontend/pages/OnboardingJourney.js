@@ -26,9 +26,19 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
   // Force le rendu complet du composant après le montage
   const [isFullyMounted, setIsFullyMounted] = useState(false);
   
-  // SOLUTION DE SECOURS: Variable globale pour signaler que l'onboarding est en cours
+  // SOLUTION DE SECOURS: Variables globales pour signaler que l'onboarding est en cours
   // Cela permet de détecter si l'onboarding devrait être visible même après un rechargement de page
   window.IKIGAI_ONBOARDING_ACTIVE = true;
+  window.IKIGAI_ONBOARDING_VISIBLE = true; // Nouveau flag pour vérifier la visibilité réelle
+  
+  // Conserver l'information dans le localStorage également pour plus de robustesse
+  try {
+    localStorage.setItem('ikigai_onboarding_active', 'true');
+    localStorage.setItem('ikigai_onboarding_visible', 'true');
+    localStorage.setItem('ikigai_onboarding_timestamp', new Date().toISOString());
+  } catch (e) {
+    console.warn("Impossible de sauvegarder l'état d'onboarding dans localStorage:", e);
+  }
   
   // Effet pour vérifier le montage du composant
   useEffect(() => {
