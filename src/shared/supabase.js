@@ -33,32 +33,49 @@ const options = {
       // Ajout explicite de l'API key comme header
       apikey: supabaseAnonKey
     },
-    fetch: (url, options) => {
-      // S'assurer que chaque requête contient l'API key
-      if (!options.headers) options.headers = {};
-      options.headers['apikey'] = supabaseAnonKey;
-      options.headers['Authorization'] = `Bearer ${supabaseAnonKey}`;
-
-      // Ajouter les en-têtes CSRF pour les méthodes non-GET
-      if (options.method && options.method !== 'GET') {
-        options.headers = CSRFProtection.prepareHeaders(options.headers || {});
-      }
-
-      // Log sécurisé - confirme l'envoi des en-têtes mais sans les afficher
-      console.log("Requête envoyée à Supabase avec en-têtes d'authentification");
-
-      return fetch(url, {
-        ...options,
-        signal: options.signal || (AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined),
-      })
-      .catch(error => {
-        console.error("Erreur de fetch Supabase:", error.name);
-        if (error.name === 'AbortError') {
-          throw new Error('La requête a pris trop de temps à s\'exécuter.');
-        }
-        throw error;
-      });
-    }
+   fetch: async (url, options = {}) => { 
+     try { 
+       // Vérifier si nous avons besoin d'un token d'authentification 
+       const requiresAuth = url.includes('/auth/v1/') || 
+                           url.includes('/rest/v1/') || 
+                           url.includes('/storage/v1/'); 
+       
+       if (requiresAuth) { 
+         // Récupérer la session active 
+         const { data } = await supabase.auth.getSession(); 
+         const session = data?.session; 
+         
+         // Assurer que les headers sont initialisés 
+         if (!options.headers) options.headers = {}; 
+         
+         // Ajouter les headers d'authentification si disponibles 
+         if (session?.access_token) { 
+           options.headers['Authorization'] = `Bearer ${session.access_token}`; 
+           console.log(`Requête authentifiée: ${url.split('/').pop()}`); 
+         } else { 
+           console.warn(`Requête sans token: ${url.split('/').pop()}`); 
+         } 
+         
+         // Toujours inclure apikey dans les headers 
+         options.headers['apikey'] = supabaseAnonKey; 
+       } 
+       
+       // Définir un timeout raisonnable pour les requêtes 
+       const controller = new AbortController(); 
+       const timeoutId = setTimeout(() => controller.abort(), 30000); 
+       
+       const response = await fetch(url, { 
+         ...options, 
+         signal: controller.signal 
+       }); 
+       
+       clearTimeout(timeoutId); 
+       return response; 
+     } catch (error) { 
+       console.error(`Erreur fetch: ${error.message}`); 
+       throw error; 
+     } 
+   }
   }
 };
 
