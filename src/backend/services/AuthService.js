@@ -27,9 +27,6 @@ async function sendWelcomeEmail(email, userData, type = 'email') {
       body: JSON.stringify({
         email: email,
         nom: nom,
-        prénom: prénom,
-        âge: âge,
-        statut: statut,
         date_inscription: new Date().toISOString(),
         type_inscription: type
       })
