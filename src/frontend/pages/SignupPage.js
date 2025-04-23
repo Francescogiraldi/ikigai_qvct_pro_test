@@ -238,30 +238,16 @@ const SignupPage = ({ onComplete, onCancel }) => {
       } else {
         // En mode inscription
         result = await API.auth.signUp(email, password, firstName, lastName, age, status);
-        
-        if (result.success) {
-          // Vérifier si la confirmation par email est requise
-          if (result.requiresEmailConfirmation) {
-            setSuccessMessage(result.message); // Afficher le message demandant de vérifier les emails
-            // Ne pas appeler onComplete ici, l'utilisateur doit confirmer son email
-            // Fermer le modal après un délai pour laisser le temps de lire le message
-            setTimeout(() => {
-              if (onCancel) {
-                onCancel();
-              }
-            }, 3000); // Délai de 3 secondes
-          } else if (result.user) {
-            // Inscription réussie sans confirmation requise (ou déjà confirmée)
-            setSuccessMessage(result.message || 'Inscription réussie!');
-            if (onComplete) {
-              onComplete(result.user); // Passer l'utilisateur à l'étape suivante
-            }
-          } else {
-             // Cas où success est true mais user est null (ne devrait pas arriver mais sécurité)
-             setError("Une erreur inattendue s'est produite lors de l'inscription.");
+
+        if (result.success && result.user) {
+          // Inscription réussie, appeler onComplete immédiatement
+          console.log("Inscription réussie (redirection immédiate vers onboarding), appel de onComplete avec l'utilisateur:", result.user);
+          setSuccessMessage(result.message || 'Inscription réussie!'); // Afficher un message de succès
+          if (onComplete) {
+            onComplete(result.user); // Passer l'utilisateur à l'étape suivante (onboarding)
           }
         } else {
-          // Gérer les erreurs d'inscription
+          // Gérer les erreurs d'inscription ou le cas où l'utilisateur n'est pas retourné
           setError(result.message || "Une erreur s'est produite lors de l'inscription.");
         }
       }
