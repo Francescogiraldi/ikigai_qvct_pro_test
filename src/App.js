@@ -644,9 +644,6 @@ function App() {
                 setIsLoading(false);
                 console.log("DEBUG App.js: isLoading défini à false après activation de l'onboarding");
               }, 100);
-            } else {
-              // Terminer le chargement si on n'affiche pas l'onboarding
-              setIsLoading(false);
             }
             
             // Vérifier les états après le rendu
@@ -660,6 +657,14 @@ function App() {
                 timestamp: new Date().toISOString()
               });
             }, 200);
+            
+            // Sécurité: s'assurer que isLoading est réinitialisé même en cas de problème
+            setTimeout(() => {
+              if (isLoading) {
+                console.warn("FAILSAFE: Reset isLoading qui est resté bloqué à true");
+                setIsLoading(false);
+              }
+            }, 3000);
             
           } catch (error) {
             console.error("Erreur lors de la redirection après authentification:", error);
