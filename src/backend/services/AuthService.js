@@ -89,7 +89,7 @@ class AuthService {
   }
   
   // Inscription avec email et mot de passe
-  static async signUp(email, password) {
+  static async signUp(email, password, firstName, lastName, age, status) {
     try {
       // Validation des données
       const validation = Validator.validate(
@@ -120,7 +120,15 @@ class AuthService {
       
       const { data, error } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            age: age,
+            status: status
+          }
+        }
       });
 
       // Ajouter la vérification pour la confirmation d'email

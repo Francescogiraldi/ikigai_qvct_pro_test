@@ -290,7 +290,7 @@ const SignupPage = ({ onComplete, onCancel }) => {
         const finalStatus = status === 'Autre' ? otherStatus : status;
         
         // Utiliser API.auth plutôt que d'appeler directement supabase
-        const result = await API.auth.signUp(email, password);
+        const result = await API.auth.signUp(email, password, firstName, lastName, age, finalStatus);
         
         if (!result.success) {
           throw new Error(result.message || "L'inscription a échoué. Veuillez réessayer.");
@@ -299,40 +299,8 @@ const SignupPage = ({ onComplete, onCancel }) => {
         // Afficher le message de confirmation d'inscription
         setSuccessMessage('Félicitation votre inscription est réussie ! 🎉');
         
-        // Si l'inscription est réussie, mettre à jour les métadonnées de l'utilisateur
-        try {
-          // Utiliser la mise à jour des métadonnées de Supabase
-          const { error: updateError } = await supabase.auth.updateUser({
-            data: {
-              first_name: firstName,
-              last_name: lastName,
-              age: age,
-              status: finalStatus
-            }
-          });
-          
-          // Stocker l'âge dans la base de données Supabase si fourni
-          if (age) {
-            const { error: profileError } = await supabase
-              .from('profiles')
-              .upsert({
-                user_id: result.user.id,
-                age: parseInt(age) || null
-              });
-              
-            if (profileError) {
-              console.warn("Erreur lors de l'enregistrement de l'âge:", profileError);
-            }
-          }
-          
-          if (updateError) {
-            console.warn("Erreur lors de la mise à jour des métadonnées utilisateur:", updateError);
-            // Continuer malgré l'erreur pour ne pas bloquer l'inscription
-          }
-        } catch (metadataError) {
-          console.warn("Erreur lors de la mise à jour des métadonnées:", metadataError);
-          // Continuer malgré l'erreur pour ne pas bloquer l'inscription
-        }
+        // Les métadonnées sont maintenant envoyées directement via signUp
+        // L'âge est également inclus dans les métadonnées, la mise à jour séparée dans 'profiles' n'est plus nécessaire ici.
 
         // Pour un nouvel utilisateur, on doit toujours rediriger vers l'onboarding
         // Définir explicitement que l'onboarding n'est pas complété pour un nouveau compte

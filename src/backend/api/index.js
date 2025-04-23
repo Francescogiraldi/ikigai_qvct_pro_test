@@ -13,8 +13,8 @@ export const authAPI = {
   },
   
   // S'inscrire
-  signUp: async (email, password) => {
-    return await AuthService.signUp(email, password);
+  signUp: async (email, password, firstName, lastName, age, status) => {
+    return await AuthService.signUp(email, password, firstName, lastName, age, status);
   },
   
   // Se connecter
