@@ -724,7 +724,7 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
           }}
         >
           {currentQuestion === sessions[currentSession]?.questions.length - 1 ? 
-            "Dernière question" : `${sessions[currentSession]?.questions.length - currentQuestion - 1} restante${sessions[currentSession]?.questions.length - currentQuestion - 1 > 1 ? &apos;s&apos; : ''}`}
+            "Dernière question" : `${sessions[currentSession]?.questions.length - currentQuestion - 1} restante${sessions[currentSession]?.questions.length - currentQuestion - 1 > 1 ? "s" : ""}`}
         </motion.span>
       </motion.div>
     );
