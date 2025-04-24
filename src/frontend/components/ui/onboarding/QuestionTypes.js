@@ -423,7 +423,7 @@ const TagSelection = ({
           animate={{ opacity: 1, height: 'auto' }}
           transition={{ duration: 0.3 }}
         >
-          <h4 className="font-medium text-gray-700 mb-3">Niveau d'importance :</h4>
+          <h4 className="font-medium text-gray-700 mb-3">Niveau d&apos;importance :</h4>
           {selectedValues.map(optionId => {
             const option = options.find(o => o.id === optionId);
             if (!option) return null;

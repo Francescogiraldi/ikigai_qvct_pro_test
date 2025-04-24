@@ -176,7 +176,7 @@ const ProfilePage = ({
             </h3>
             <div className="space-y-3 pl-6"> {/* Indent options */} 
               <div className="flex items-center justify-between">
-                <span className="text-gray-600">Sons de l'application</span>
+                <span className="text-gray-600">Sons de l&apos;application</span>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input 
                     type="checkbox" 
@@ -255,7 +255,7 @@ const ProfilePage = ({
             </h3>
             <div className="space-y-3 pl-6"> {/* Indent options */} 
               <div className="flex items-center justify-between">
-                <span className="text-gray-600">Langue de l'application</span>
+                <span className="text-gray-600">Langue de l&apos;application</span>
                 {/* Updated select style */} 
                 <select 
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"

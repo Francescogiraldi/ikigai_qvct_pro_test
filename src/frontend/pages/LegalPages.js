@@ -13,12 +13,12 @@ const LegalPages = ({ page, onClose }) => {
             © 2025 IKIGAI. Tous droits réservés.
           </p>
           <p>
-            L'ensemble du contenu de cette application, y compris les textes, images, logos, designs, et code source, 
-            est la propriété exclusive d'IKIGAI et est protégé par les lois internationales sur le droit d'auteur.
+            L&apos;ensemble du contenu de cette application, y compris les textes, images, logos, designs, et code source, 
+            est la propriété exclusive d&apos;IKIGAI et est protégé par les lois internationales sur le droit d&apos;auteur.
           </p>
           <p>
             Toute reproduction, distribution, modification ou utilisation du contenu sans autorisation écrite préalable 
-            est strictement interdite et constitue une violation des droits d'auteur.
+            est strictement interdite et constitue une violation des droits d&apos;auteur.
           </p>
         </div>
       )
@@ -41,7 +41,7 @@ const LegalPages = ({ page, onClose }) => {
           
           <h3 className="text-lg font-semibold">Hébergement</h3>
           <p>
-            L'application est hébergée par Netlify.<br />
+            L&apos;application est hébergée par Netlify.<br />
             Adresse : 
           </p>
           
@@ -96,12 +96,12 @@ const LegalPages = ({ page, onClose }) => {
             Conformément au RGPD, vous disposez des droits suivants :
           </p>
           <ul className="list-disc pl-5 space-y-1">
-            <li>Droit d'accès à vos données</li>
+            <li>Droit d&apos;accès à vos données</li>
             <li>Droit de rectification</li>
-            <li>Droit à l'effacement ("droit à l'oubli")</li>
+            <li>Droit à l&apos;effacement (&quot;droit à l&apos;oubli&quot;)</li>
             <li>Droit à la limitation du traitement</li>
             <li>Droit à la portabilité des données</li>
-            <li>Droit d'opposition</li>
+            <li>Droit d&apos;opposition</li>
           </ul>
           
           <p>

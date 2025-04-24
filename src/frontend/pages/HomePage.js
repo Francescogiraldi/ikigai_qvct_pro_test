@@ -122,7 +122,7 @@ const HomePage = ({
                 <h1 className="text-2xl font-bold mb-1">
                   {userFirstName ? `Bonjour ${userFirstName} !` : 'Bonjour !'}
                 </h1>
-                <p className="text-gray-600">Comment vous sentez-vous aujourd'hui ?</p>
+                <p className="text-gray-600">Comment vous sentez-vous aujourd&apos;hui ?</p>
               </div>
               <Character character="🧘" emotion="happy" />
             </div>

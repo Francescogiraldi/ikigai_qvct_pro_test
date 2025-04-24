@@ -72,6 +72,14 @@ verify-*.sh
 lint-*.sh
 .env.test
 .env.e2e
+
+# Fichiers spécifiques à exclure
+test-e2e-simulation.sh
+test-plan.md
+test-results.md
+test-user.sh
+verify-synthax.sh
+.env.test
 jest.config.js
 jest.setup.js
 coverage-report/

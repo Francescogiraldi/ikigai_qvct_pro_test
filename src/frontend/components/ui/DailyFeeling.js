@@ -102,7 +102,7 @@ const DailyFeeling = ({ onSubmit, userId }) => {
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
           >
             <div className="text-center mb-6">
-              <h2 className="text-xl font-bold mb-2">Comment vous sentez-vous aujourd'hui ?</h2>
+              <h2 className="text-xl font-bold mb-2">Comment vous sentez-vous aujourd&apos;hui ?</h2>
               <p className="text-gray-600 text-sm">Votre bien-être est important pour nous</p>
             </div>
             

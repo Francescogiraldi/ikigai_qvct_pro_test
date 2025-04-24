@@ -176,7 +176,7 @@ const TextQuestion = ({ question, value = "", onChange, disabled }) => {
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <span className="font-medium">💡 Conseil:</span> Essayez d'être aussi détaillé que possible dans votre réponse.
+            <span className="font-medium">💡 Conseil:</span> Essayez d&apos;être aussi détaillé que possible dans votre réponse.
           </motion.div>
         )}
       </AnimatePresence>

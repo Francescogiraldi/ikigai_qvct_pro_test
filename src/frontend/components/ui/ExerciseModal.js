@@ -28,7 +28,7 @@ const ExerciseModal = ({ exercise, onClose }) => {
             Préparez-vous pour un exercice de <span className="font-semibold">{exercise.duration}</span> axé sur la <span className="font-semibold">{exercise.title.toLowerCase()}</span>.
           </p>
           <p className="text-sm text-gray-500">
-            Cette fonctionnalité sera pleinement implémentée dans une future version pour vous guider à travers l'exercice.
+            Cette fonctionnalité sera pleinement implémentée dans une future version pour vous guider à travers l&apos;exercice.
           </p>
         </div>
         <div className="p-4 bg-gray-50 text-right">

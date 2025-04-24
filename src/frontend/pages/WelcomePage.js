@@ -50,7 +50,7 @@ const WelcomePage = ({ onStart, onSignIn }) => {
           </ul>
           
           <p className="text-blue-700 mt-4 text-xs text-center">
-            Vos réponses sont analysées par un modèle d'Intelligence Artificielle soigneusement sélectionné et adapté à vos besoins.
+            Vos réponses sont analysées par un modèle d&apos;Intelligence Artificielle soigneusement sélectionné et adapté à vos besoins.
           </p>
           
           <p className="text-blue-700 mt-2 text-xs text-center">

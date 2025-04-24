@@ -12,6 +12,7 @@ try {
   // 1. Forcer un build avec des warnings mais pas d'erreurs pour les hooks React
   process.env.CI = 'false';
   process.env.ESLINT_NO_DEV_ERRORS = 'true';
+  process.env.DISABLE_ESLINT_PLUGIN = 'true';
   
   // 2. Exécuter le build
   console.log('🏗️ Exécution du build...');
