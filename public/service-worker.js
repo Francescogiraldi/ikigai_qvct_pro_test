@@ -19,18 +19,18 @@ const RESOURCES_TO_CACHE = [
 // Installation du service worker
 self.addEventListener('install', event => {
   console.log('Service Worker: Installation en cours');
-
-   // Combiner les opérations dans un seul waitUntil
-   event.waitUntil(
-    Promise.all([
-      self.skipWaiting(),
-      caches.open(CACHE_NAME).then(cache => {
-        console.log('Service Worker: Mise en cache des ressources essentielles');
-        return cache.addAll(RESOURCES_TO_CACHE);
-      })
-    ])
+  
+  // Activer immédiatement le service worker sans attendre le rechargement
+  self.skipWaiting();
+  
+  // Mise en cache des ressources essentielles
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => {
+      console.log('Service Worker: Mise en cache des ressources essentielles');
+      return cache.addAll(RESOURCES_TO_CACHE);
+    })
   );
-}); // Correction: Suppression de la parenthèse supplémentaire
+});
 
 // Activation du service worker
 self.addEventListener('activate', event => {

@@ -91,10 +91,7 @@ class AuthService {
   // Inscription avec email et mot de passe
   static async signUp(email, password, firstName, lastName, age, status) {
     try {
-      console.log("AuthService: Début de l'inscription", { email, firstName, lastName });
-      
       // Validation des données
-      console.log("AuthService: Validation de l'email");
       const validation = Validator.validate(
         { email },
         {
@@ -103,11 +100,9 @@ class AuthService {
       );
       
       // Validation spécifique du mot de passe avec notre fonction robuste
-      console.log("AuthService: Validation du mot de passe");
       const passwordValidation = this.validatePassword(password);
       
       if (!validation.isValid) {
-        console.warn("AuthService: Email invalide:", validation.errors);
         return {
           user: null,
           success: false,
@@ -116,25 +111,11 @@ class AuthService {
       }
       
       if (!passwordValidation.isValid) {
-        console.warn("AuthService: Mot de passe invalide:", passwordValidation.message);
         return {
           user: null,
           success: false,
           message: passwordValidation.message
         };
-      }
-      
-      // Forcer la persistance de l'état d'inscription
-      try {
-        // Stocker des informations sur l'inscription en cours
-        localStorage.setItem('ikigai_signup_pending', JSON.stringify({
-          email,
-          firstName,
-          lastName,
-          timestamp: new Date().toISOString()
-        }));
-      } catch (storageError) {
-        console.warn("Erreur lors de la sauvegarde de l'état d'inscription:", storageError);
       }
       
       const { data, error } = await supabase.auth.signUp({
@@ -150,16 +131,19 @@ class AuthService {
         }
       });
 
-      // La vérification d'email a été supprimée
+      // Ajouter la vérification pour la confirmation d'email
       if (!error && data && data.user) {
-        // Envoyer l'email de bienvenue
-        await sendWelcomeEmail(email, data, 'email');
-        return {
-          user: data.user,
-          success: true,
-          message: 'Inscription réussie!',
-          requiresEmailConfirmation: false
-        };
+        // Vérifier si l'utilisateur doit confirmer son email
+        if (data.user.identities && data.user.identities.length > 0 && !data.user.email_confirmed_at) {
+          // Envoyer l'email de bienvenue même si la confirmation est requise
+          await sendWelcomeEmail(email, data, 'email');
+          return {
+            user: data.user,
+            success: true,
+            message: 'Inscription réussie! Veuillez vérifier votre email pour confirmer votre compte avant de vous connecter.',
+            requiresEmailConfirmation: true
+          };
+        }
       }
       
       // Vérifier s'il y a une erreur

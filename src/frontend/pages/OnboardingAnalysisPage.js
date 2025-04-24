@@ -74,81 +74,162 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
 
   // Effet pour effectuer l'analyse réelle des données
   useEffect(() => {
+    // Variable pour suivre si le composant est monté
+    let isMounted = true;
+    // Références aux intervalles et timeouts pour pouvoir les nettoyer
+    let checkInterval = null;
+    let safetyTimeout = null;
+    let completionTimeout = null;
+    
     const performAnalysis = async () => {
       try {
-        console.log("Démarrage de l'analyse des réponses d'onboarding:", responses);
-        
-        // 1. Sauvegarder les réponses dans le stockage Supabase
-        await API.progress.saveModuleResponses('onboarding', responses);
-        
-        // 2. Analyse des réponses par le service IA pour générer des recommandations
-        try {
-          const { data } = await API.auth.getCurrentUser();
-          if (data && data.user) {
-            console.log("Utilisateur identifié pour l'analyse:", data.user.id);
-            await API.ai.analyzeUserResponses(data.user.id);
-          } else {
-            console.log("Pas d'utilisateur identifié pour l'analyse");
+        // Vérification robuste des réponses
+        if (!responses || Object.keys(responses).length === 0) {
+          console.warn("Réponses vides ou invalides pour l'analyse");
+          
+          // Tentative de récupération depuis le localStorage
+          let recoveredResponses = null;
+          try {
+            const storedResponses = localStorage.getItem('onboarding_pending_responses');
+            if (storedResponses) {
+              recoveredResponses = JSON.parse(storedResponses);
+              console.log("Réponses récupérées depuis localStorage");
+            }
+          } catch (e) {
+            console.warn("Échec de récupération des réponses:", e);
           }
-        } catch (authError) {
-          console.warn("Erreur lors de la récupération de l'utilisateur:", authError);
-          // Continuer sans l'analyse utilisateur
+          
+          // Si on n'a toujours pas de réponses, créer un objet minimal
+          if (!recoveredResponses) {
+            console.warn("Création d'un objet de réponses minimal pour continuer");
+            recoveredResponses = {
+              recoveryMode: true,
+              timestamp: new Date().toISOString()
+            };
+          }
+          
+          // On continue avec ces réponses de secours
+          console.log("Poursuite de l'analyse avec réponses de secours:", recoveredResponses);
         }
         
-        // 3. Observer la progression de l'animation et terminer une fois à 100%
-        let checkInterval;
+        console.log("Démarrage de l'analyse des réponses:", Object.keys(responses).length);
+        
+        // 1. Sauvegarder les réponses dans le stockage Supabase de manière asynchrone
+        // sans attendre la complétion pour que l'animation continue
+        API.progress.saveModuleResponses('onboarding', responses)
+          .then(() => console.log("Sauvegarde des réponses réussie"))
+          .catch(e => console.warn("Échec sauvegarde des réponses, continuons:", e));
+        
+        // 2. Analyse des réponses par le service IA - également asynchrone
+        API.auth.getCurrentUser()
+          .then(data => {
+            if (data && data.user) {
+              console.log("Utilisateur identifié pour l'analyse:", data.user.id);
+              return API.ai.analyzeUserResponses(data.user.id);
+            }
+            console.log("Pas d'utilisateur identifié, analyse anonyme");
+            return Promise.resolve();
+          })
+          .catch(e => console.warn("Erreur analyse IA, continuons:", e));
+        
+        // 3. Observer la progression de l'animation avec un mécanisme plus robuste
         const checkProgressAndFinish = () => {
-          console.log("Vérification de la progression:", progress);
+          if (!isMounted) return true; // Arrêter si le composant n'est plus monté
+          
+          // Vérifier si l'animation est complète
           if (progress >= 100) {
-            console.log("Progression à 100%, finalisation de l'analyse");
-            if (checkInterval) clearInterval(checkInterval);
+            console.log("Animation terminée, préparation de la finalisation");
             
-            // Attendre un peu pour que l'utilisateur voie l'étape finale
-            setTimeout(() => {
-              console.log("Appel du callback de complétion");
-              if (onAnalysisComplete) {
-                onAnalysisComplete(responses);
-              } else {
-                console.error("Le callback onAnalysisComplete n'est pas défini");
-              }
-            }, 1200); // Délai légèrement plus long pour les animations
+            // Nettoyer les intervalles et timeouts
+            if (checkInterval) clearInterval(checkInterval);
+            if (safetyTimeout) clearTimeout(safetyTimeout);
+            
+            // Stabiliser la progression à 100% pour l'animation finale
+            setProgress(100);
+            
+            // Attendre un peu pour l'animation finale et déclencher la complétion
+            if (isMounted && !completionTimeout) {
+              completionTimeout = setTimeout(() => {
+                if (!isMounted) return;
+                
+                console.log("Finalisation de l'analyse");
+                if (onAnalysisComplete) {
+                  onAnalysisComplete(responses);
+                } else {
+                  console.error("Erreur: callback onAnalysisComplete non disponible");
+                  // En dernier recours, forcer un rafraîchissement
+                  window.location.reload();
+                }
+              }, 1000);
+            }
             return true;
           }
           return false;
         };
         
-        // Vérifier tout de suite si la progression est déjà à 100%
+        // Vérifier immédiatement, puis configurer un intervalle
         if (!checkProgressAndFinish()) {
-          // Sinon configurer un intervalle de vérification
-          checkInterval = setInterval(checkProgressAndFinish, 500);
+          checkInterval = setInterval(checkProgressAndFinish, 300);
           
-          // Ajouter un timeout de sécurité pour s'assurer que l'analyse se termine
-          setTimeout(() => {
-            if (checkInterval) {
-              clearInterval(checkInterval);
-              console.log("Timeout de sécurité atteint, finalisation de l'analyse");
+          // Double sécurité: s'assurer que l'analyse se termine quoi qu'il arrive
+          safetyTimeout = setTimeout(() => {
+            if (!isMounted) return;
+            
+            console.log("Timeout de sécurité déclenché pour finaliser l'analyse");
+            setProgress(100); // Forcer la progression à 100%
+            
+            // Nettoyage
+            if (checkInterval) clearInterval(checkInterval);
+            
+            // Attendre très légèrement pour la mise à jour d'état
+            setTimeout(() => {
+              if (!isMounted) return;
+              
               if (onAnalysisComplete) {
                 onAnalysisComplete(responses);
               }
-            }
-          }, 15000); // 15 secondes maximum
+            }, 100);
+          }, 10000); // 10 secondes maximum
         }
       } catch (err) {
-        console.error("Erreur lors de l'analyse des réponses:", err);
-        setError("Une erreur est survenue lors de l'analyse. Veuillez réessayer.");
+        console.error("Erreur critique lors de l'analyse:", err);
+        if (isMounted) {
+          setError("Une erreur est survenue. Nous finalisons votre profil...");
+        }
         
-        // Même en cas d'erreur, continuer après un délai
+        // Même en cas d'erreur critique, continuer
         setTimeout(() => {
-          if (onAnalysisComplete) {
-            onAnalysisComplete(responses);
-          }
-        }, 3000);
+          if (!isMounted) return;
+          
+          // Forcer la progression à 100%
+          setProgress(100);
+          
+          // Attendre légèrement puis finaliser
+          setTimeout(() => {
+            if (!isMounted) return;
+            
+            if (onAnalysisComplete) {
+              console.log("Finalisation après erreur");
+              onAnalysisComplete(responses);
+            }
+          }, 500);
+        }, 1500);
       }
     };
     
     // Démarrer l'analyse
     performAnalysis();
-  }, [responses]); // eslint-disable-line react-hooks/exhaustive-deps
+    
+    // Nettoyage à la démonture du composant
+    return () => {
+      isMounted = false;
+      if (checkInterval) clearInterval(checkInterval);
+      if (safetyTimeout) clearTimeout(safetyTimeout);
+      if (completionTimeout) clearTimeout(completionTimeout);
+      console.log("Nettoyage des ressources de l'analyse");
+    };
+  }, []); // Dépendance vide pour n'exécuter qu'une seule fois
+           // Les réponses sont accessibles via la prop et ne changeront pas
 
   // Composant pour les particules flottantes
   const FloatingParticles = () => {

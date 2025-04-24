@@ -36,107 +36,14 @@ function App() {
   const [onboardingResponses, setOnboardingResponses] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Écouter les événements d'authentification et de transition
-  useEffect(() => {
-    const handleAuthEvent = (event) => {
-      console.log("Événement d'authentification détecté dans App.js:", event.detail);
-      
-      // Forcer une mise à jour d'état pour garantir que l'interface s'actualise
-      setIsLoading(prevState => {
-        console.log("Réinitialisation forcée des états après authentification");
-        return prevState; // Ne pas modifier l'état directement pour éviter un re-rendu prématuré
-      });
-    };
-    
-    // Nouvel écouteur pour démarrer l'onboarding
-    const handleStartOnboarding = (event) => {
-      console.log("Événement de démarrage d'onboarding détecté:", event.detail);
-      
-      // Forcer la séquence de redirection complète
-      setIsLoading(false);
-      setShowSignup(false);
-      setShowWelcome(false);
-      setSelectedIsland(null);
-      setShowOnboardingAnalysis(false);
-      setShowOnboarding(true);
-      
-      console.log("Transition vers onboarding forcée par événement");
-    };
-    
-    // Écouteur pour forcer l'onboarding si aucune autre vue n'est active
-    const handleForceOnboarding = () => {
-      console.log("RÉCUPÉRATION CRITIQUE: Forçage d'onboarding demandé");
-      
-      if (!showOnboarding && !showOnboardingAnalysis && !selectedIsland) {
-        setIsLoading(false);
-        setShowSignup(false);
-        setShowWelcome(false);
-        setShowOnboarding(true);
-      }
-    };
-    
-    window.addEventListener('supabase:auth:signIn', handleAuthEvent);
-    window.addEventListener('ikigai:startOnboarding', handleStartOnboarding);
-    window.addEventListener('ikigai:forceOnboarding', handleForceOnboarding);
-    
-    return () => {
-      window.removeEventListener('supabase:auth:signIn', handleAuthEvent);
-      window.removeEventListener('ikigai:startOnboarding', handleStartOnboarding);
-      window.removeEventListener('ikigai:forceOnboarding', handleForceOnboarding);
-    };
-  }, [showOnboarding, showOnboardingAnalysis, selectedIsland]);
-
-  // Force isLoading à false si bloqué pendant trop longtemps
-  useEffect(() => {
-    // Si isLoading reste true pendant plus de 5 secondes, c'est probablement un bug
-    const forceLoadingTimeout = setTimeout(() => {
-      if (isLoading) {
-        console.warn("SUPER FAILSAFE: isLoading bloqué pendant >5s, force reset");
-        setIsLoading(false);
-        
-        // Vérifier si nous sommes connectés mais bloqués
-        const lastSignIn = localStorage.getItem('ikigai_lastSignIn');
-        const timeThreshold = 10 * 60 * 1000; // 10 minutes
-        const recentSignIn = lastSignIn && (new Date().getTime() - new Date(lastSignIn).getTime() < timeThreshold);
-        
-        if (recentSignIn) {
-          console.log("Détection d'une connexion récente, tentative de restauration de l'onboarding");
-          setShowSignup(false);
-          setShowWelcome(false);
-          setSelectedIsland(null);
-          setShowOnboardingAnalysis(false);
-          setShowOnboarding(true);
-        }
-      }
-    }, 5000); // 5 secondes
-    
-    return () => clearTimeout(forceLoadingTimeout);
-  }, [isLoading]); // Dépendance à isLoading seulement
-  
   // Charger les données initiales
-  // Vérifier si onboarding était actif lors d'un rechargement de page
   useEffect(() => {
-    // Si la variable globale indique que l'onboarding était actif
-    // mais que showOnboarding est false, c'est probablement un bug
-    if (window.IKIGAI_ONBOARDING_ACTIVE && !showOnboarding && !isLoading) {
-      console.warn("RESTAURATION CRITIQUE: Onboarding détecté comme actif mais non affiché");
-      setShowSignup(false);
-      setShowWelcome(false);
-      setShowOnboarding(true);
-    }
-  }, [showOnboarding, isLoading]);
-  
-  useEffect(() => {
+    // Tracking pour l'initialisation
+    window.IKIGAI_APP_INITIALIZING = true;
+    
     const initApp = async () => {
       try {
-        // IMPORTANT: Vérifier si un état critique a été sauvegardé en session
-        if (window.IKIGAI_AUTH_STATE && window.IKIGAI_AUTH_STATE.signedIn) {
-          console.log("RESTAURATION D'URGENCE - État authentifié détecté dans mémoire globale");
-          setIsLoading(false);
-          setShowSignup(false);
-          setShowWelcome(false);
-          setShowOnboarding(true);
-        }
+        console.log("Initialisation de l'application...");
         
         // Vérifier si nous sommes sur la page de réinitialisation de mot de passe
         const pathname = window.location.pathname;
@@ -148,145 +55,161 @@ function App() {
           return; // Ne pas continuer le chargement des autres données
         }
         
-        // Charger le contenu statique
-        const allIslands = API.content.getAllIslands();
-        const allChallenges = API.content.getAllChallenges();
-        const allExercises = API.content.getAllExercises();
-        const allModules = API.content.getAllModules();
+        // Chargement en parallèle des données statiques et de l'authentification
+        // pour améliorer les performances
+        const [
+          allIslands, 
+          allChallenges, 
+          allExercises, 
+          allModules, 
+          isAuth
+        ] = await Promise.all([
+          API.content.getAllIslands(),
+          API.content.getAllChallenges(),
+          API.content.getAllExercises(),
+          API.content.getAllModules(),
+          API.auth.isAuthenticated()
+        ]);
         
+        // Mettre à jour les états avec les données statiques immédiatement
         setIslands(allIslands);
         setChallenges(allChallenges);
         setExercises(allExercises);
         setModules(allModules);
         
-        // Vérifier si l'utilisateur est connecté
-        const isAuth = await API.auth.isAuthenticated();
-        
-        // Charger la progression
-        const userProgress = await API.progress.getProgress();
-        setProgress(userProgress);
-        
-        // Charger les paramètres utilisateur
-        const settings = await API.progress.getUserSettings();
-        if (settings) {
-          setUserSettings(settings);
-          // Apply dark mode immediately
-          if (settings.darkMode) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-        } else {
-           // Apply default dark mode state if no settings found
-           if (userSettings.darkMode) {
-             document.documentElement.classList.add('dark');
-           } else {
-             document.documentElement.classList.remove('dark');
-           }
-        }
-        
-        // Détecter un retour d'inscription/connexion via Google
+        // Détecter un retour d'authentification OAuth
         const isOAuthRedirect = window.location.hash && 
                                (window.location.hash.includes('access_token') || 
                                 window.location.hash.includes('error'));
                                 
         if (isOAuthRedirect) {
           console.log("Détection d'un retour d'authentification OAuth");
-          // Nettoyer l'URL après détection du retour OAuth
           window.history.replaceState(null, document.title, window.location.pathname);
         }
         
-        // Récupérer les données de session OAuth si elles existent
+        // Récupérer la session OAuth si disponible
         let oauthSession = null;
         try {
           const storedSession = sessionStorage.getItem('oauthSession');
           if (storedSession) {
             oauthSession = JSON.parse(storedSession);
-            console.log("Session OAuth détectée:", oauthSession);
-            // Nettoyer la session après l'avoir récupérée
+            console.log("Session OAuth trouvée");
             sessionStorage.removeItem('oauthSession');
           }
         } catch (error) {
-          console.warn("Erreur lors de la récupération de la session OAuth:", error);
+          console.warn("Erreur de récupération de session OAuth:", error);
         }
         
-        // Vérifier si l'onboarding est complété depuis les données de progression
-        // Avec une approche plus robuste pour éviter les incohérences
-        let isOnboardingCompleted = false;
+        let userProgress = null;
+        let settings = null;
         
-        // D'abord vérifier dans les données de progression (la source la plus fiable)
-        if (userProgress && userProgress.moduleResponses && 
-            userProgress.moduleResponses.onboarding && 
-            userProgress.moduleResponses.onboarding.completedAt) {
-          isOnboardingCompleted = true;
-          console.log("Onboarding confirmé comme complété dans les données utilisateur");
-        }
-        
-        // Si non complété dans les données utilisateur, vérifier SecureStorage
-        // mais uniquement si les données utilisateur sont vides (nouvel utilisateur)
-        if (!isOnboardingCompleted && 
-            (!userProgress.moduleResponses || !Object.keys(userProgress.moduleResponses).length)) {
-          const secureStorageStatus = SecureStorage.getItem('onboardingCompleted');
-          if (secureStorageStatus === 'true') {
-            isOnboardingCompleted = true;
-            console.log("Onboarding confirmé comme complété dans SecureStorage");
-          }
-        }
-        
-        console.log("État final onboarding:", isOnboardingCompleted ? "Complété" : "Non complété");
-        
+        // Si l'utilisateur est authentifié, charger ses données
         if (isAuth) {
-          // Utilisateur connecté
-          console.log("Utilisateur authentifié");
+          console.log("Utilisateur authentifié, chargement des données...");
           
-          // Gestion spécifique pour les retours OAuth
-          if (isOAuthRedirect && oauthSession) {
-            // Si la session indique que l'onboarding est nécessaire et qu'il n'est pas déjà complété
-            // dans les données de progression
-            if (oauthSession.needsOnboarding && !isOnboardingCompleted) {
-              console.log("Redirection vers l'onboarding après authentification OAuth");
-              setShowWelcome(false);
-              setShowSignup(false);
-              setShowOnboarding(true);
-              setIsLoading(false);
-              return;
+          // Charger les données utilisateur en parallèle
+          const [progressData, userSettings] = await Promise.all([
+            API.progress.getProgress(),
+            API.progress.getUserSettings()
+          ]);
+          
+          userProgress = progressData;
+          settings = userSettings;
+          
+          // Mettre à jour les états
+          setProgress(userProgress);
+          
+          if (settings) {
+            setUserSettings(settings);
+            // Appliquer le mode sombre immédiatement
+            if (settings.darkMode) {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
+            }
+          } else {
+            // Appliquer le mode par défaut si pas de paramètres
+            if (userSettings.darkMode) {
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.classList.remove('dark');
             }
           }
+        }
+        
+        // Vérification robuste du statut d'onboarding avec SessionManager
+        let isOnboardingCompleted = false;
+        
+        // 1. Source primaire : données utilisateur (si disponibles)
+        if (userProgress?.moduleResponses?.onboarding?.completedAt) {
+          isOnboardingCompleted = true;
+          console.log("Onboarding complété selon les données utilisateur");
+          
+          // Synchroniser avec SessionManager
+          SessionManager.setOnboardingStatus(true, userProgress.moduleResponses.onboarding);
+        } 
+        // 2. Source secondaire : SessionManager
+        else {
+          const onboardingStatus = SessionManager.getOnboardingStatus();
+          isOnboardingCompleted = onboardingStatus.completed;
           
           if (isOnboardingCompleted) {
-            // Si l'utilisateur est inscrit et a complété l'onboarding, afficher la page principale
+            console.log("Onboarding complété selon SessionManager");
+          }
+        }
+        
+        console.log("Statut final onboarding:", isOnboardingCompleted ? "Complété" : "Non complété");
+        
+        // Décider quelle page afficher en fonction de l'authentification et de l'onboarding
+        if (isAuth) {
+          console.log("Décision de navigation pour utilisateur authentifié");
+          
+          // Cas spécial: retour OAuth avec besoin d'onboarding
+          if (isOAuthRedirect && oauthSession && oauthSession.needsOnboarding && !isOnboardingCompleted) {
+            console.log("Redirection vers onboarding post-OAuth");
+            setShowWelcome(false);
+            setShowSignup(false);
+            setShowOnboarding(true);
+          }
+          // Cas standard: onboarding déjà complété
+          else if (isOnboardingCompleted) {
+            console.log("Navigation vers page principale (onboarding complété)");
             setShowWelcome(false);
             setShowSignup(false);
             setShowOnboarding(false);
-            console.log("Affichage de la page principale - Onboarding déjà complété");
-          } else {
-            // Si l'utilisateur est inscrit mais n'a pas complété l'onboarding
+          } 
+          // Cas standard: onboarding à compléter
+          else {
+            console.log("Navigation vers onboarding (non complété)");
             setShowOnboarding(true);
             setShowWelcome(false);
             setShowSignup(false);
-            console.log("Affichage de l'onboarding - Onboarding non complété");
           }
-        } else {
-          // Utilisateur non connecté
-          console.log("Utilisateur non authentifié");
-          // Toujours afficher d'abord la page d'accueil (WelcomePage) pour les utilisateurs non connectés
+        } 
+        // Utilisateur non connecté
+        else {
+          console.log("Navigation pour utilisateur non authentifié");
           setShowWelcome(true);
           setShowSignup(false);
           setShowOnboarding(false);
-          console.log("Affichage de la page d'accueil - Utilisateur non connecté");
           
-          // Stocker l'état d'onboarding pour une utilisation ultérieure
+          // Si l'onboarding a déjà été complété, le garder en mémoire
           if (isOnboardingCompleted) {
-            SecureStorage.setItem('onboardingCompleted', 'true');
+            SessionManager.setOnboardingStatus(true);
           }
         }
-        
-        // Nettoyer SecureStorage après utilisation
-        SecureStorage.removeItem('onboardingCompleted');
       } catch (error) {
-        console.error("Erreur lors de l'initialisation:", error);
+        console.error("Erreur critique d'initialisation:", error);
+        
+        // En cas d'erreur critique, afficher la page d'accueil par défaut
+        setShowWelcome(true);
+        setShowSignup(false);
+        setShowOnboarding(false);
       } finally {
+        // Toujours désactiver le loader
         setIsLoading(false);
+        window.IKIGAI_APP_INITIALIZING = false;
+        console.log("Initialisation terminée");
       }
     };
     
@@ -405,122 +328,185 @@ function App() {
     try {
       console.log("App: Complétion de l'onboarding avec réponses:", responses);
       
-      // Effacer les flags de visibilité de l'onboarding
-      window.IKIGAI_ONBOARDING_VISIBLE = false;
-      localStorage.removeItem('ikigai_onboarding_visible');
-      
       // Ajouter un timestamp de complétion si non présent
       const responsesWithTimestamp = {
         ...responses,
         completedAt: responses.completedAt || new Date().toISOString()
       };
       
-      // IMPORTANT: Désactiver TOUS les autres écrans en une seule opération atomique
-      console.log("Désactivation de tous les écrans avant l'analyse");
+      // 1. Stocker les réponses d'abord pour qu'elles soient disponibles
+      // immédiatement quand la page d'analyse sera affichée
+      setOnboardingResponses(responsesWithTimestamp);
       
-      // Désactiver tout en une fois pour éviter les états transitoires
-      setIsLoading(false);
+      // 2. Marquer l'onboarding comme complété dans différents stockages pour redondance
+      try {
+        // Dans localStorage pour persistance entre sessions
+        localStorage.setItem('onboardingCompleted', 'true');
+        localStorage.setItem('onboardingCompletedAt', responsesWithTimestamp.completedAt);
+        
+        // Dans sessionStorage pour la session courante
+        sessionStorage.setItem('onboardingCompleted', 'true');
+        
+        // Dans une variable globale pour accès immédiat
+        window.IKIGAI_ONBOARDING_COMPLETED = true;
+        window.IKIGAI_ONBOARDING_TIMESTAMP = responsesWithTimestamp.completedAt;
+      } catch (storageError) {
+        console.warn("Erreur de stockage local:", storageError);
+      }
+      
+      // 3. Effacer les flags de visibilité de l'onboarding
+      try {
+        localStorage.removeItem('ikigai_onboarding_active');
+        localStorage.removeItem('ikigai_onboarding_visible');
+        window.IKIGAI_ONBOARDING_ACTIVE = false;
+        window.IKIGAI_ONBOARDING_VISIBLE = false;
+      } catch (e) {
+        console.warn("Erreur nettoyage variables onboarding:", e);
+      }
+      
+      // 4. Désactiver TOUS les autres écrans en une seule opération atomique
+      console.log("Désactivation des écrans précédents");
       setShowWelcome(false);
       setShowSignup(false);
       setShowOnboarding(false);
       setSelectedIsland(null);
+      setIsLoading(false);
       
-      // Attendre un instant pour laisser React mettre à jour les états
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      // IMPORTANT: Activer la page d'analyse AVANT de stocker les réponses
-      console.log("Activation de la page d'analyse d'onboarding");
-      setShowOnboardingAnalysis(true);
-      
-      // Attendre un autre instant pour confirmer que l'état est mis à jour
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      // Ensuite seulement stocker les réponses
-      setOnboardingResponses(responsesWithTimestamp);
-      
-      // Marquer l'onboarding comme complété dans localStorage pour référence future
-      localStorage.setItem('onboardingCompleted', 'true');
-      // Continuer à marquer que le flux d'onboarding est actif
-      localStorage.setItem('ikigai_onboarding_active', 'true');
-      
-      // Signal global pour indiquer que nous sommes en phase d'analyse
-      window.IKIGAI_ANALYSIS_ACTIVE = true;
-      
-      console.log("Activation de la page d'analyse complétée. État:", {
-        showOnboardingAnalysis: true,
-        showOnboarding: false,
-        showSignup: false,
-        showWelcome: false,
-        isLoading: false,
-        responsesStored: !!responsesWithTimestamp,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Mettre en place un mécanisme de secours si la page d'analyse ne s'affiche pas
+      // 5. IMPORTANT: Petit délai avant d'activer la page d'analyse pour permettre
+      // au React de finaliser la mise à jour des états précédents
+      console.log("Préparation de l'activation de la page d'analyse");
       setTimeout(() => {
-        if (!document.querySelector('.analysis-page-container')) {
-          console.warn("RÉCUPÉRATION CRITIQUE: Page d'analyse non détectée après 500ms");
-          // Forcer à nouveau l'état
-          setShowOnboardingAnalysis(true);
-        }
-      }, 500);
+        // Activer la page d'analyse d'onboarding
+        setShowOnboardingAnalysis(true);
+        console.log("Activation de la page d'analyse d'onboarding effectuée");
+      }, 100);
       
     } catch (error) {
       console.error("Erreur lors de la complétion de l'onboarding:", error);
-      // En cas d'erreur, continuer vers la page principale
+      
+      // En cas d'erreur, utiliser une approche plus robuste
+      // 1. Réinitialiser tous les écrans
+      setShowWelcome(false);
+      setShowSignup(false);
       setShowOnboarding(false);
       setShowOnboardingAnalysis(false);
       setIsLoading(false);
+      
+      // 2. Petit délai avant de rediriger vers la page d'analyse
+      setTimeout(() => {
+        // Stocker les réponses même en cas d'erreur
+        if (!onboardingResponses && responses) {
+          setOnboardingResponses({
+            ...responses,
+            completedAt: new Date().toISOString(),
+            recoveryMode: true
+          });
+        }
+        
+        // Activer la page d'analyse en mode de secours
+        setShowOnboardingAnalysis(true);
+        console.log("Récupération après erreur: page d'analyse activée");
+      }, 200);
     }
   };
   
   // Gérer la fin de l'analyse
   const handleAnalysisComplete = async (responses) => {
+    // Marquer immédiatement la fonction comme en cours d'exécution pour éviter les appels multiples
+    window.IKIGAI_ANALYSIS_COMPLETING = true;
+    
     try {
-      console.log("App: Analyse terminée pour les réponses:", responses);
+      console.log("App: Analyse terminée pour les réponses");
       
-      // Nettoyer les flags globaux et localStorage
-      window.IKIGAI_ONBOARDING_ACTIVE = false;
-      window.IKIGAI_ANALYSIS_ACTIVE = false;
-      window.IKIGAI_ONBOARDING_VISIBLE = false;
+      // 1. Préparation des données de progression avec robustesse
+      let updatedProgress = {...(progress || {})};
       
-      localStorage.removeItem('ikigai_onboarding_active');
-      localStorage.removeItem('ikigai_onboarding_visible');
-      localStorage.removeItem('ikigai_analysis_active');
-      
-      // Marquer explicitement l'onboarding comme complété
-      localStorage.setItem('onboardingCompleted', 'true');
+      // Assurer que toutes les structures nécessaires existent
+      updatedProgress.totalPoints = updatedProgress.totalPoints || 0;
+      updatedProgress.moduleResponses = updatedProgress.moduleResponses || {};
+      updatedProgress.completedModules = updatedProgress.completedModules || [];
       
       // Ajouter des points pour avoir complété l'onboarding
-      const updatedProgress = {...progress};
-      updatedProgress.totalPoints = (updatedProgress.totalPoints || 0) + 200;
+      updatedProgress.totalPoints += 200;
       
-      // S'assurer que moduleResponses.onboarding existe et est marqué comme complété
-      if (!updatedProgress.moduleResponses) {
-        updatedProgress.moduleResponses = {};
-      }
-      if (!updatedProgress.moduleResponses.onboarding) {
-        updatedProgress.moduleResponses.onboarding = {};
-      }
+      // S'assurer que l'onboarding est marqué comme complété avec un timestamp
       updatedProgress.moduleResponses.onboarding = {
         ...responses,
-        completedAt: responses.completedAt || new Date().toISOString()
+        completedAt: responses.completedAt || new Date().toISOString(),
+        pointsAwarded: 200
       };
       
-      // Sauvegarder les données de progression avant de changer l'interface
-      try {
-        console.log("Sauvegarde de la progression avec onboarding complété");
-        await API.progress.saveProgress(updatedProgress);
-        setProgress(updatedProgress);
-      } catch (saveError) {
-        console.warn("Erreur lors de la sauvegarde de la progression:", saveError);
-        // Continuer malgré l'erreur
+      // Ajouter l'onboarding à la liste des modules complétés s'il n'y est pas déjà
+      if (!updatedProgress.completedModules.includes('onboarding')) {
+        updatedProgress.completedModules.push('onboarding');
       }
       
-      // TRANSITION ATOMIQUE: réinitialiser tous les états en une fois
-      console.log("Fermeture de la page d'analyse et transition vers l'application principale");
+      // 2. Sauvegarder la progression de manière asynchrone - ne pas bloquer la suite
+      API.progress.saveProgress(updatedProgress)
+        .then(() => {
+          console.log("Progression sauvegardée avec succès");
+          // Mettre à jour l'état local uniquement après sauvegarde réussie
+          setProgress(updatedProgress);
+        })
+        .catch(saveError => {
+          console.warn("Erreur de sauvegarde:", saveError);
+          // En cas d'échec, mettre quand même à jour l'état local
+          setProgress(updatedProgress);
+        });
       
-      // Désactiver tous les écrans intermédiaires
+      // 3. Nettoyer toutes les variables et états liés à l'onboarding
+      try {
+        // Nettoyer localStorage et sessionStorage
+        const keysToRemove = [
+          'onboarding_pending_responses',
+          'onboarding_responses_timestamp',
+          'ikigai_analysis_active',
+          'ikigai_analysis_timestamp'
+        ];
+        
+        keysToRemove.forEach(key => {
+          try {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+          } catch (e) {
+            // Ignorer les erreurs de nettoyage
+          }
+        });
+        
+        // Nettoyer les variables globales
+        window.IKIGAI_ANALYSIS_ACTIVE = false;
+        window.IKIGAI_ONBOARDING_ACTIVE = false;
+      } catch (cleanupError) {
+        console.warn("Erreur de nettoyage:", cleanupError);
+      }
+      
+      // 4. IMPORTANT: Transition atomique vers la page principale
+      // Nous utilisons un délai pour assurer que les autres états ont été traités
+      console.log("Préparation transition page principale");
+      
+      // D'abord désactiver la page d'analyse
+      setShowOnboardingAnalysis(false);
+      
+      // Ensuite, après un court délai, désactiver tous les autres états
+      // pour s'assurer que les changements d'états sont traités correctement
+      setTimeout(() => {
+        // Réinitialiser complètement tous les états de navigation
+        setOnboardingResponses(null);
+        setShowWelcome(false);
+        setShowSignup(false);
+        setShowOnboarding(false);
+        setIsLoading(false);
+        setSelectedIsland(null);
+        
+        // Marquer que l'opération est terminée
+        window.IKIGAI_ANALYSIS_COMPLETING = false;
+        console.log("Transition vers la page principale terminée");
+      }, 300);
+      
+    } catch (error) {
+      console.error("Erreur critique lors de la finalisation de l'analyse:", error);
+      
+      // Plan de secours - réinitialiser tous les états
       setShowOnboardingAnalysis(false);
       setOnboardingResponses(null);
       setShowWelcome(false);
@@ -528,86 +514,13 @@ function App() {
       setShowOnboarding(false);
       setIsLoading(false);
       
-      // Attendre que React mette à jour les états
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      // Vérification de sécurité
-      console.log("Vérification de l'état après transition:", {
-        showOnboardingAnalysis: false,
-        showOnboarding: false,
-        showWelcome: false,
-        showSignup: false,
-        isLoading: false,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Mécanisme de secours pour s'assurer que l'application principale s'affiche
-      setTimeout(() => {
-        if (showOnboardingAnalysis || showOnboarding || showWelcome || showSignup || isLoading) {
-          console.warn("RÉCUPÉRATION CRITIQUE: L'interface n'a pas transitionné correctement");
-          // Forcer une dernière fois les états
-          setShowOnboardingAnalysis(false);
-          setShowWelcome(false);
-          setShowSignup(false);
-          setShowOnboarding(false);
-          setIsLoading(false);
-        } else {
-          console.log("Transition vers la page principale réussie");
-        }
-      }, 300);
-      
-    } catch (error) {
-      console.error("Erreur lors de la finalisation de l'analyse:", error);
-      // En cas d'erreur, continuer vers la page principale avec une approche plus prudente
-      
-      // Désactiver tous les écrans intermédiaires dans l'ordre
-      setIsLoading(false);
-      setShowOnboardingAnalysis(false);
-      setOnboardingResponses(null);
-      
-      // Puis attendre et désactiver les autres écrans
-      setTimeout(() => {
-        setShowWelcome(false);
-        setShowSignup(false);
-        setShowOnboarding(false);
-      }, 100);
+      // Marquer que l'opération est terminée même en cas d'erreur
+      window.IKIGAI_ANALYSIS_COMPLETING = false;
     }
   };
   
   // Affichage pendant le chargement
   if (isLoading) {
-    // Log pour debugging
-    console.log("DEBUG App.js: Affichage de l'écran de chargement", {
-      timestamp: new Date().toISOString(),
-      showWelcome, 
-      showSignup, 
-      showOnboarding, 
-      showOnboardingAnalysis,
-      selectedIsland
-    });
-    
-    // VÉRIFICATION CRITIQUE: Si nous sommes bloqués sur l'écran de chargement mais que l'authentification
-    // est récente, c'est probablement un bug - Vérifier plusieurs indicateurs
-    const lastSignIn = localStorage.getItem('ikigai_lastSignIn');
-    const onboardingActive = localStorage.getItem('ikigai_onboarding_active');
-    const timeThreshold = 10 * 60 * 1000; // 10 minutes
-    const recentSignIn = lastSignIn && (new Date().getTime() - new Date(lastSignIn).getTime() < timeThreshold);
-    
-    if (recentSignIn && onboardingActive === 'true') {
-      // Si nous avons détecté un état où l'onboarding devrait être affiché,
-      // forcer immédiatement un rendu d'urgence de l'onboarding
-      console.warn("RÉCUPÉRATION D'URGENCE: Redirection forcée vers onboarding");
-      setTimeout(() => {
-        setIsLoading(false);
-        setShowSignup(false);
-        setShowWelcome(false);
-        setShowOnboarding(true);
-      }, 100);
-    }
-    
-    // Capture du temps de démarrage pour le debug
-    const loadingStartTime = Date.now();
-    
     return (
       <div className="flex items-center justify-center h-screen flex-col bg-gray-50">
         <div className="flex items-center">
@@ -621,53 +534,6 @@ function App() {
           <div className="absolute top-0 left-0 w-full h-full rounded-full border-4 border-t-transparent border-l-transparent animate-spin border-blue-500"></div>
         </div>
         <span className="mt-4 text-gray-600">Chargement...</span>
-        <div className="mt-2 text-xs text-gray-400">
-          {/* Timer pour afficher le temps d'attente */}
-          <span id="loading-timer">{Math.floor((Date.now() - loadingStartTime) / 1000)}s</span>
-          <script dangerouslySetInnerHTML={{
-            __html: `
-              // Script pour mettre à jour le compteur toutes les secondes
-              setInterval(() => {
-                const timer = document.getElementById('loading-timer');
-                if (timer) {
-                  const seconds = Math.floor((Date.now() - ${loadingStartTime}) / 1000);
-                  timer.textContent = seconds + 's';
-                  // Alerter si le chargement prend trop de temps et appliquer une solution d'urgence
-                  if (seconds > 5) {
-                    timer.style.color = 'red';
-                    console.warn("ALERTE CRITIQUE: Temps de chargement anormalement long: " + seconds + "s");
-                    
-                    // Tenter une récupération d'urgence côté client après 10 secondes
-                    if (seconds > 10 && localStorage.getItem('ikigai_lastSignIn')) {
-                      console.error("RÉCUPÉRATION D'URGENCE JAVASCRIPT: Tentative de déblocage");
-                      // Forcer un rechargement de la page
-                      window.location.reload();
-                    }
-                  }
-                }
-              }, 1000);
-            `
-          }} />
-        </div>
-        
-        {/* Bouton d'urgence pour débloquer l'application si bloquée plus de 15 secondes */}
-        <div className="mt-6">
-          <button 
-            onClick={() => {
-              console.log("Déblocage manuel demandé par l'utilisateur");
-              setIsLoading(false);
-              const onboardingActive = localStorage.getItem('ikigai_onboarding_active');
-              if (onboardingActive === 'true') {
-                setShowOnboarding(true);
-              } else {
-                setShowWelcome(true);
-              }
-            }}
-            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 focus:outline-none"
-          >
-            Débloquer l'application
-          </button>
-        </div>
       </div>
     );
   }
@@ -701,192 +567,66 @@ function App() {
       />
     );
   }
-
+  
   // PRIORITÉ 3: Si l'onboarding est actif, l'afficher
   if (showOnboarding) {
-    console.log("DEBUG App.js: Rendu du composant OnboardingJourney avec priorité");
-    // Forcer le rendu avec un key unique pour garantir un montage complet
-    try {
-      // Marquer explicitement que l'onboarding est affiché
-      localStorage.setItem('ikigai_onboarding_active', 'true');
-      
-      return (
-        <OnboardingJourney 
-          key={`onboarding-${Date.now()}`} // Clé unique pour forcer un nouveau montage
-          onComplete={handleOnboardingComplete}
-          onCancel={() => {
-            console.log("DEBUG App.js: Annulation d'onboarding");
-            localStorage.removeItem('ikigai_onboarding_active');
-            setShowOnboarding(false);
-            setShowSignup(true);
-          }}
-        />
-      );
-    } catch (error) {
-      console.error("DEBUG App.js: Erreur lors du rendu de OnboardingJourney:", error);
-      // Fallback en cas d'erreur
-      return (
-        <div className="flex items-center justify-center h-screen flex-col bg-red-50">
-          <div className="p-4 bg-white rounded-lg shadow-lg max-w-md text-center">
-            <h2 className="text-xl font-bold text-red-600 mb-2">Erreur lors du chargement</h2>
-            <p className="text-gray-600 mb-4">Une erreur s'est produite lors du chargement du parcours d'onboarding.</p>
-            <button 
-              onClick={() => {
-                console.log("DEBUG App.js: Tentative de rechargement");
-                window.location.reload();
-              }}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Recharger l'application
-            </button>
-          </div>
-        </div>
-      );
-    }
+    return (
+      <OnboardingJourney 
+        onComplete={handleOnboardingComplete}
+        onCancel={() => {
+          setShowOnboarding(false);
+          setShowSignup(true);
+        }}
+      />
+    );
   }
   
   // PRIORITÉ 4: Si la page d'inscription est active, l'afficher
   if (showSignup) {
     return (
       <SignupPage
-        onComplete={async (userData) => {
-          try {
-            console.log("Démarrage de la redirection après inscription/connexion", {
-              userData: userData ? {
-                id: userData.id,
-                email: userData.email,
-                timestamp: new Date().toISOString()
-              } : "Données utilisateur manquantes"
-            });
-            
-            // D'abord effacer l'état de connexion pour garantir que nous sommes bien en transition
-            setShowSignup(false);
-            setIsLoading(true); // Ajouter un état de chargement pendant la transition
-            console.log("DEBUG App.js: États mis à jour - showSignup=false, isLoading=true");
-            
-            // Attendre un court instant pour laisser React mettre à jour les états
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Récupérer les données de progression
-            console.log("DEBUG App.js: Récupération des données de progression");
-            let userProgress;
-            let progressError = null;
-            
-            try {
-              userProgress = await API.progress.getProgress();
-              console.log("DEBUG App.js: Données de progression récupérées:", userProgress);
-            } catch (error) {
-              progressError = error;
-              console.error("DEBUG App.js: Erreur lors de la récupération des données de progression:", error);
-              
-              // Tentative de récupération avec un délai supplémentaire
-              try {
-                console.log("DEBUG App.js: Nouvelle tentative de récupération après délai...");
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                userProgress = await API.progress.getProgress();
-                console.log("DEBUG App.js: Nouvelle tentative réussie, données récupérées:", userProgress);
-              } catch (retryError) {
-                console.error("DEBUG App.js: Échec de la nouvelle tentative:", retryError);
-                // Initialiser avec un objet vide en dernier recours
-                userProgress = {}; 
-              }
-            }
-            
-            // Si on a une erreur et un objet vide, utiliser une structure minimale
-            if (progressError && (!userProgress || Object.keys(userProgress).length === 0)) {
-              console.warn("DEBUG App.js: Utilisation d'une structure minimale pour un nouvel utilisateur");
-              userProgress = {
-                totalPoints: 0,
-                streakDays: 0,
-                lastActive: new Date().toISOString(),
-                completedModules: {},
-                completedChallenges: {},
-                moduleResponses: {},
-                badges: []
-              };
-            }
-            
-            // Déterminer si l'onboarding est complété
-            let isOnboardingCompleted = localStorage.getItem('onboardingCompleted') === 'true';
-            
-            if (localStorage.getItem('onboardingCompleted') === null && userProgress) {
-              isOnboardingCompleted = !!(userProgress.moduleResponses && 
-                                       userProgress.moduleResponses.onboarding && 
-                                       userProgress.moduleResponses.onboarding.completedAt);
-            }
-            
-            console.log("État d'onboarding:", isOnboardingCompleted ? "Complété" : "Non complété");
-            
-            // Toujours effacer l'item du localStorage après utilisation
-            localStorage.removeItem('onboardingCompleted');
+        onComplete={async () => {
+          // Récupérer les données de progression directement depuis l'API pour avoir les informations les plus à jour
+          const userProgress = await API.progress.getProgress();
           
-            // Pour un nouvel utilisateur, forcer l'onboarding quelle que soit la valeur
-            // Pour un utilisateur existant, vérifier dans les données de progression
-            const forceOnboarding = userData && userData.app_metadata?.provider === 'email' && 
-                                    (!userData.created_at || 
-                                    new Date(userData.created_at).getTime() > (Date.now() - 5 * 60 * 1000)); // 5 minutes
-            
-            console.log("DEBUG App.js: Décision de redirection", {
-              isOnboardingCompleted,
-              forceOnboarding,
-              userData: userData ? {
-                provider: userData.app_metadata?.provider,
-                created_at: userData.created_at
-              } : null
-            });
-            
-            // Mettre à jour les états pour la redirection
-            if (isOnboardingCompleted && !forceOnboarding) {
-              // Si l'onboarding est déjà complété, aller à la page principale
-              console.log("Redirection vers la page principale");
-              setShowOnboarding(false);
-              setShowOnboardingAnalysis(false);
-            } else {
-              // Sinon, aller à l'onboarding
-              console.log("Redirection vers l'onboarding");
-              
-              console.log("CHANGEMENT CRITIQUE: Simplification du flux de redirection");
-              
-              // NOUVEAU FLUX DE REDIRECTION: D'abord désactiver le chargement
-              setIsLoading(false);
-              
-              // Puis définir tous les états nécessaires en une fois
-              setShowSignup(false);
-              setShowWelcome(false);
-              setSelectedIsland(null);
-              setShowOnboardingAnalysis(false);
-              setShowOnboarding(true);
-              
-              console.log("DEBUG App.js: Tous les états définis: isLoading=false, showOnboarding=true");
-            }
-            
-            // Vérifier les états après le rendu
-            setTimeout(() => {
-              console.log("DEBUG App.js: États finaux après transition", {
-                showOnboarding: showOnboarding,
-                showSignup: showSignup,
-                isLoading: isLoading,
-                showOnboardingAnalysis: showOnboardingAnalysis,
-                isOnboardingCompleted: isOnboardingCompleted,
-                timestamp: new Date().toISOString()
-              });
-            }, 200);
-            
-            // Sécurité: s'assurer que isLoading est réinitialisé même en cas de problème
-            setTimeout(() => {
-              if (isLoading) {
-                console.warn("FAILSAFE: Reset isLoading qui est resté bloqué à true");
-                setIsLoading(false);
-              }
-            }, 3000);
-            
-          } catch (error) {
-            console.error("Erreur lors de la redirection après authentification:", error);
-            // En cas d'erreur, afficher l'onboarding par défaut
-            setShowSignup(false);
-            setShowOnboarding(true);
-            setIsLoading(false);
+          // Récupérer l'état d'onboarding depuis localStorage ou le calculer depuis userProgress
+          let isOnboardingCompleted = localStorage.getItem('onboardingCompleted') === 'true';
+          
+          // Si la valeur n'est pas dans localStorage, vérifier dans les données de progression
+          if (localStorage.getItem('onboardingCompleted') === null) {
+            isOnboardingCompleted = userProgress.moduleResponses && 
+                                     userProgress.moduleResponses.onboarding && 
+                                     userProgress.moduleResponses.onboarding.completedAt;
           }
+          
+          // Supprimer l'item du localStorage après utilisation
+          localStorage.removeItem('onboardingCompleted');
+          
+          console.log("Après connexion - État onboarding:", isOnboardingCompleted ? "Complété" : "Non complété");
+          console.log("Données onboarding:", userProgress.moduleResponses?.onboarding);
+          
+          setShowSignup(false);
+          
+          // Vérifier que userProgress est bien défini avant d'utiliser ses propriétés
+          if (userProgress && Object.keys(userProgress).length > 0) {
+            // Rediriger vers l'onboarding uniquement si l'utilisateur ne l'a pas déjà complété
+            if (isOnboardingCompleted) {
+              // Si l'onboarding est déjà complété, afficher directement la page principale
+              setShowOnboarding(false);
+              console.log("Redirection vers la page principale - Onboarding déjà complété");
+            } else {
+              // Sinon, afficher l'onboarding
+              setShowOnboarding(true);
+              console.log("Redirection vers l'onboarding - Onboarding non complété");
+            }
+          } else {
+            // En cas de données manquantes, afficher l'onboarding par défaut
+            setShowOnboarding(true);
+            console.log("Redirection vers l'onboarding - Données de progression indisponibles");
+          }
+          
+          // Nettoyer localStorage si présent
+          localStorage.removeItem('onboardingCompleted');
         }}
         onCancel={() => {
           setShowSignup(false);

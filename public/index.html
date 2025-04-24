@@ -40,15 +40,13 @@
       To create a production bundle, use `npm run build` or `yarn build`.
     -->
     <script>
+      // Désinstallation des service workers existants pour supprimer l'écran de déblocage
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js')
-            .then(registration => {
-              console.log('Service Worker enregistré avec succès:', registration.scope);
-            })
-            .catch(error => {
-              console.error('Erreur lors de l\'enregistrement du Service Worker:', error);
-            });
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          for(let registration of registrations) {
+            registration.unregister();
+            console.log('Service Worker désinstallé');
+          }
         });
       }
     </script>

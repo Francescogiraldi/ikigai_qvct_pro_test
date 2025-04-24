@@ -59,16 +59,26 @@ try {
   global.Buffer = global.Buffer || { isBuffer: () => false };
 }
 
-// Enregistrement du service worker pour la PWA
+// Désactivation temporaire de l'enregistrement du service worker qui peut causer l'écran de débloquage
+// if ('serviceWorker' in navigator) {
+//   window.addEventListener('load', () => {
+//     navigator.serviceWorker.register('/service-worker.js')
+//       .then(registration => {
+//         console.log('Service Worker enregistré avec succès:', registration.scope);
+//       })
+//       .catch(error => {
+//         console.log('Échec de l\'enregistrement du Service Worker:', error);
+//       });
+//   });
+// }
+
+// Désinstallation des service workers existants
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(registration => {
-        console.log('Service Worker enregistré avec succès:', registration.scope);
-      })
-      .catch(error => {
-        console.log('Échec de l\'enregistrement du Service Worker:', error);
-      });
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    for(let registration of registrations) {
+      registration.unregister();
+      console.log('Service Worker désinstallé');
+    }
   });
 }
 
