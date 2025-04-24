@@ -17,7 +17,6 @@
   NETLIFY_USE_YARN = "false"
   ESLINT_NO_DEV_ERRORS = "true"
   DISABLE_ESLINT_PLUGIN = "true"
-  DISABLE_ESLINT_PLUGIN = "true"
 
 # Increase timeout for builds
 [functions]
