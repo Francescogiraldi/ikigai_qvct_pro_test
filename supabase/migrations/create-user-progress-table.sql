@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS public.user_progress (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   progress_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  onboarding_completed BOOLEAN DEFAULT FALSE,
+  onboarding_completed_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id)
@@ -19,6 +21,8 @@ COMMENT ON TABLE public.user_progress IS 'Stocke la progression des utilisateurs
 COMMENT ON COLUMN public.user_progress.id IS 'Identifiant unique de l''enregistrement';
 COMMENT ON COLUMN public.user_progress.user_id IS 'Identifiant de l''utilisateur (référence auth.users)';
 COMMENT ON COLUMN public.user_progress.progress_data IS 'Données de progression au format JSON (points, modules complétés, etc.)';
+COMMENT ON COLUMN public.user_progress.onboarding_completed IS 'Indicateur si l''onboarding a été complété';
+COMMENT ON COLUMN public.user_progress.onboarding_completed_at IS 'Date à laquelle l''onboarding a été complété';
 COMMENT ON COLUMN public.user_progress.created_at IS 'Date de création de l''enregistrement';
 COMMENT ON COLUMN public.user_progress.updated_at IS 'Date de la dernière mise à jour';
 
@@ -45,6 +49,7 @@ CREATE POLICY user_progress_update_policy
 
 -- Index pour améliorer les performances des requêtes
 CREATE INDEX IF NOT EXISTS idx_user_progress_user_id ON public.user_progress(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_progress_onboarding ON public.user_progress(onboarding_completed);
 
 -- Trigger pour mettre à jour automatiquement le champ updated_at
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()

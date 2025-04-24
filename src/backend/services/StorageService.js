@@ -302,24 +302,35 @@ class StorageService {
     return updatedProgress;
   }
   
-  // Sauvegarder les réponses d'onboarding dans Supabase (optimisé)
+  // Sauvegarder les réponses d'onboarding dans Supabase (optimisé et sécurisé)
   static async saveOnboardingResponses(responses) {
     try {
+      // Vérifier si la sauvegarde est déjà en cours pour éviter les doubles appels
+      if (window.IKIGAI_SAVING_ONBOARDING) {
+        console.log("StorageService: Sauvegarde déjà en cours, ignorée");
+        return this.getProgressSync();
+      }
+      
+      window.IKIGAI_SAVING_ONBOARDING = true;
       console.log("StorageService: Sauvegarde des réponses d'onboarding");
       
-      // Traiter les valeurs personnalisées si nécessaire
+      // Sauvegarde rapide dans localStorage comme filet de sécurité
+      try {
+        localStorage.setItem('onboarding_backup_responses', JSON.stringify(responses));
+        localStorage.setItem('onboarding_backup_timestamp', new Date().toISOString());
+      } catch (e) {
+        // Ignorer les erreurs de localStorage
+      }
+      
+      // Traiter les valeurs personnalisées
       let responsesToSave = { ...responses };
       
-      // Si des entrées se terminent par _custom, les fusionner correctement
+      // Fusionner les entrées _custom
       Object.keys(responsesToSave).forEach(key => {
         if (key.endsWith('_custom')) {
           const mainQuestionId = key.replace('_custom', '');
-          
-          // Ajouter les données personnalisées à l'objet principal
           responsesToSave.customValues = responsesToSave.customValues || {};
           responsesToSave.customValues[mainQuestionId] = responsesToSave[key];
-          
-          // Supprimer l'entrée _custom séparée pour éviter la duplication
           delete responsesToSave[key];
         }
       });
@@ -329,21 +340,38 @@ class StorageService {
         responsesToSave.completedAt = new Date().toISOString();
       }
       
-      // 1. Sauvegarder en local immédiatement (pour fallback rapide)
-      const progress = await this.getProgress();
-      const userProgress = UserProgress.fromJSON(progress);
-      userProgress.saveModuleResponses('onboarding', responsesToSave);
-      SecureStorage.setItem(this.LOCAL_STORAGE_KEY, userProgress.toJSON());
+      // Sauvegarder en local immédiatement
+      let userProgress;
+      try {
+        const progress = this.getProgressSync(); // Utiliser la version synchrone pour éviter les blocages
+        userProgress = UserProgress.fromJSON(progress);
+        userProgress.saveModuleResponses('onboarding', responsesToSave);
+        SecureStorage.setItem(this.LOCAL_STORAGE_KEY, userProgress.toJSON());
+      } catch (localError) {
+        console.warn("Erreur de sauvegarde locale (non bloquant):", localError);
+        // Créer un objet vide en cas d'échec
+        userProgress = new UserProgress();
+        userProgress.saveModuleResponses('onboarding', responsesToSave);
+      }
       
-      // 2. Vérifier si l'utilisateur est connecté
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user) {
-        // 3. Sauvegarder dans Supabase de manière non-bloquante (avec Promise.allSettled)
-        // Cette approche permet une exécution parallèle et ne bloque pas même si une opération échoue
-        Promise.allSettled([
-          // STRATÉGIE PRINCIPALE: Sauvegarder dans user_responses (prioritaire)
-          // Notre déclencheur SQL s'occupera de synchroniser vers onboarding_responses
+      // Lancer la sauvegarde Supabase en arrière-plan avec un timeout
+      setTimeout(async () => {
+        try {
+          // Vérifier si l'utilisateur est connecté avec un timeout de protection
+          const userPromise = supabase.auth.getUser();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout lors de la récupération utilisateur")), 3000)
+          );
+          
+          const userResult = await Promise.race([userPromise, timeoutPromise]);
+          const { data: { user } } = userResult;
+          
+          if (!user) {
+            console.log("Aucun utilisateur connecté, abandon sauvegarde Supabase");
+            return;
+          }
+          
+          // Sauvegarder dans user_responses en priorité (qui déclenchera le trigger vers onboarding_responses)
           supabase
             .from('user_responses')
             .upsert({
@@ -352,82 +380,63 @@ class StorageService {
               responses: responsesToSave,
               created_at: new Date(),
               updated_at: new Date()
-            }, { onConflict: 'user_id,module_id' }),
-            
-          // MISE À JOUR PARALLÈLE: Sauvegarder dans la table de progression
+            }, { onConflict: 'user_id,module_id' })
+            .then(({ error }) => {
+              if (error) {
+                console.warn("Échec sauvegarde user_responses:", error.message);
+                throw error;
+              }
+              console.log("Sauvegarde user_responses réussie");
+            })
+            .catch(() => {
+              // Essayer directement onboarding_responses en fallback
+              return supabase
+                .from('onboarding_responses')
+                .upsert({
+                  user_id: user.id,
+                  responses: responsesToSave,
+                  updated_at: new Date()
+                }, { onConflict: 'user_id' });
+            })
+            .catch(err => {
+              console.error("Échec de toutes les tentatives de sauvegarde:", err);
+            });
+          
+          // Mettre à jour user_progress en parallèle (indépendant)
           supabase
             .from('user_progress')
             .upsert({
               user_id: user.id,
               progress_data: JSON.stringify(userProgress.toJSON()),
+              onboarding_completed: true,
+              onboarding_completed_at: responsesToSave.completedAt,
               updated_at: new Date()
             }, { onConflict: 'user_id' })
-        ])
-        .then(results => {
-          // Traiter les résultats sans bloquer le flux
-          const [userResponsesResult, progressResult] = results;
-          
-          // Vérifier si la première opération a réussi
-          if (userResponsesResult.status === 'fulfilled') {
-            console.log("StorageService: Sauvegarde dans user_responses réussie");
-          } else {
-            console.warn("StorageService: Échec de sauvegarde dans user_responses:", 
-              userResponsesResult.reason?.message || "Erreur inconnue");
-              
-            // FALLBACK: En cas d'échec, essayer directement onboarding_responses
-            // Cela ne bloque pas le flux car c'est dans une promesse
-            supabase
-              .from('onboarding_responses')
-              .upsert({
-                user_id: user.id,
-                responses: responsesToSave,
-                updated_at: new Date()
-              }, { onConflict: 'user_id' })
-              .then(({ error }) => {
-                if (error) {
-                  console.warn("StorageService: Échec du fallback:", error.message);
-                  throw error;
-                } else {
-                  console.log("StorageService: Fallback vers onboarding_responses réussi");
-                }
-              })
-              .catch(err => {
-                // Même en cas d'échec, ne pas bloquer le flux
-                console.error("StorageService: Erreur critique de sauvegarde:", err);
-                // Sauvegarde de dernier recours
-                SecureStorage.setItem('onboarding_responses_backup', {
-                  user_id: user.id,
-                  responses: responsesToSave,
-                  timestamp: new Date().toISOString()
-                });
-              });
-          }
-          
-          // Vérifier si la deuxième opération a réussi
-          if (progressResult.status === 'fulfilled') {
-            console.log("StorageService: Mise à jour progress_data réussie");
-          } else {
-            console.warn("StorageService: Échec de la mise à jour progress_data:", 
-              progressResult.reason?.message || "Erreur inconnue");
-          }
-        })
-        .catch(err => {
-          // Ne jamais bloquer le flux principal même en cas d'erreur globale
-          console.error("StorageService: Erreur dans la gestion des promesses:", err);
-        });
-        
-        // Note importante: nous ne mettons pas de await devant Promise.allSettled
-        // pour éviter de bloquer le flux de l'application
-      } else {
-        console.log("StorageService: Aucun utilisateur connecté, sauvegarde locale uniquement");
-      }
+            .then(({ error }) => {
+              if (error) {
+                console.warn("Échec mise à jour progress_data:", error.message);
+              } else {
+                console.log("Mise à jour progress_data réussie");
+              }
+            });
+            
+        } catch (backgroundError) {
+          console.error("Erreur en arrière-plan (non bloquant):", backgroundError);
+        }
+      }, 100); // Petit délai pour laisser l'interface utilisateur continuer
       
-      // 4. Retourner immédiatement les données mises à jour sans attendre les opérations Supabase
-      // Cela permet à l'utilisateur de continuer sa navigation sans blocage
+      // Réinitialiser le flag après un délai
+      setTimeout(() => {
+        window.IKIGAI_SAVING_ONBOARDING = false;
+      }, 500);
+      
+      // Retourner immédiatement sans attendre Supabase
       return userProgress.toJSON();
     } catch (error) {
       console.error('Erreur lors de la sauvegarde des réponses d\'onboarding:', error);
-      // Même en cas d'erreur, utiliser le fallback sync et continuer
+      // Réinitialiser le flag même en cas d'erreur
+      window.IKIGAI_SAVING_ONBOARDING = false;
+      // Utiliser le fallback synchrone en dernier recours
       return this.saveOnboardingResponsesSync(responses);
     }
   }

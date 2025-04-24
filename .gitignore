@@ -55,8 +55,56 @@ logs
 ehthumbs.db
 Thumbs.db
 
-# Test directories
+# Test files and directories (not required for deployment)
 /tests
+/test
+/e2e
+/__tests__
+/__mocks__
+test-*.sh
+test-*.md
+test-*.js
+test-*.json
+*.test.js
+*.spec.js
+*.e2e.js
+verify-*.sh
+lint-*.sh
+.env.test
+.env.e2e
+jest.config.js
+jest.setup.js
+coverage-report/
+cypress/
+cypress.json
+playwright/
+playwright.config.js
+.storybook/
+storybook-static/
+**/test-utils/
+**/fixtures/
 
-# Supabase directory (not required for deployment)
-/supabase
+# Documentation et fichiers de développement (non requis pour le déploiement)
+/docs
+/documentation/archives
+/documentation/developpement
+/documentation/guides
+*.md
+!README.md
+!LICENSE.md
+
+# Outils de développement
+.eslintrc.js
+.prettierrc
+.stylelintrc
+tsconfig.json
+babel.config.js
+rollup.config.js
+postcss.config.js
+tailwind.config.js
+
+# Fichiers spécifiques Supabase à ignorer
+/supabase/.temp
+/supabase/storage
+/supabase/.branches
+/supabase/.snapshots

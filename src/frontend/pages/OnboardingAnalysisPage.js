@@ -81,18 +81,41 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
     let safetyTimeout = null;
     let completionTimeout = null;
     
+    // Éviter de démarrer plusieurs fois l'analyse
+    if (window.IKIGAI_ANALYSIS_PERFORMING) {
+      console.log("Analyse déjà en cours, ignorée");
+      return;
+    }
+    
+    window.IKIGAI_ANALYSIS_PERFORMING = true;
+    
     const performAnalysis = async () => {
       try {
+        // Force timeout for safety - ensure the analysis always completes
+        let forceTimeout = setTimeout(() => {
+          if (isMounted) {
+            console.log("FORCE TIMEOUT: Forçage de la finalisation de l'analyse après 8s");
+            setProgress(100);
+            
+            if (onAnalysisComplete && !window.IKIGAI_ANALYSIS_COMPLETING) {
+              window.IKIGAI_ANALYSIS_COMPLETING = true;
+              onAnalysisComplete(responses || {});
+            } else if (!onAnalysisComplete) {
+              window.location.reload();
+            }
+          }
+        }, 8000); // Force completion after 8 seconds max
+        
         // Vérification robuste des réponses
-        if (!responses || Object.keys(responses).length === 0) {
+        let responsesToUse = responses;
+        if (!responsesToUse || Object.keys(responsesToUse).length === 0) {
           console.warn("Réponses vides ou invalides pour l'analyse");
           
           // Tentative de récupération depuis le localStorage
-          let recoveredResponses = null;
           try {
             const storedResponses = localStorage.getItem('onboarding_pending_responses');
             if (storedResponses) {
-              recoveredResponses = JSON.parse(storedResponses);
+              responsesToUse = JSON.parse(storedResponses);
               console.log("Réponses récupérées depuis localStorage");
             }
           } catch (e) {
@@ -100,39 +123,39 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
           }
           
           // Si on n'a toujours pas de réponses, créer un objet minimal
-          if (!recoveredResponses) {
+          if (!responsesToUse || Object.keys(responsesToUse).length === 0) {
             console.warn("Création d'un objet de réponses minimal pour continuer");
-            recoveredResponses = {
+            responsesToUse = {
               recoveryMode: true,
               timestamp: new Date().toISOString()
             };
           }
-          
-          // On continue avec ces réponses de secours
-          console.log("Poursuite de l'analyse avec réponses de secours:", recoveredResponses);
         }
         
-        console.log("Démarrage de l'analyse des réponses:", Object.keys(responses).length);
+        console.log("Démarrage de l'analyse des réponses:", Object.keys(responsesToUse).length);
         
-        // 1. Sauvegarder les réponses dans le stockage Supabase de manière asynchrone
-        // sans attendre la complétion pour que l'animation continue
-        API.progress.saveModuleResponses('onboarding', responses)
-          .then(() => console.log("Sauvegarde des réponses réussie"))
-          .catch(e => console.warn("Échec sauvegarde des réponses, continuons:", e));
+        // Lancer les opérations asynchrones en arrière-plan sans attendre
+        // Éviter le blocage même si ces opérations échouent
+        setTimeout(() => {
+          // 1. Sauvegarder les réponses dans le stockage
+          API.progress.saveModuleResponses('onboarding', responsesToUse)
+            .then(() => console.log("Sauvegarde des réponses réussie"))
+            .catch(e => console.warn("Échec sauvegarde des réponses, non bloquant:", e));
+          
+          // 2. Analyse des réponses par le service IA
+          API.auth.getCurrentUser()
+            .then(data => {
+              if (data && data.user) {
+                console.log("Utilisateur identifié pour l'analyse:", data.user.id);
+                return API.ai.analyzeUserResponses(data.user.id)
+                  .catch(e => console.warn("Erreur analyse IA, non bloquant:", e));
+              }
+              console.log("Pas d'utilisateur identifié, analyse ignorée");
+            })
+            .catch(e => console.warn("Erreur récupération utilisateur, non bloquant:", e));
+        }, 100);
         
-        // 2. Analyse des réponses par le service IA - également asynchrone
-        API.auth.getCurrentUser()
-          .then(data => {
-            if (data && data.user) {
-              console.log("Utilisateur identifié pour l'analyse:", data.user.id);
-              return API.ai.analyzeUserResponses(data.user.id);
-            }
-            console.log("Pas d'utilisateur identifié, analyse anonyme");
-            return Promise.resolve();
-          })
-          .catch(e => console.warn("Erreur analyse IA, continuons:", e));
-        
-        // 3. Observer la progression de l'animation avec un mécanisme plus robuste
+        // 3. Observer la progression de l'animation sans bloquer
         const checkProgressAndFinish = () => {
           if (!isMounted) return true; // Arrêter si le composant n'est plus monté
           
@@ -143,24 +166,30 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
             // Nettoyer les intervalles et timeouts
             if (checkInterval) clearInterval(checkInterval);
             if (safetyTimeout) clearTimeout(safetyTimeout);
+            if (forceTimeout) clearTimeout(forceTimeout);
             
             // Stabiliser la progression à 100% pour l'animation finale
             setProgress(100);
             
             // Attendre un peu pour l'animation finale et déclencher la complétion
-            if (isMounted && !completionTimeout) {
+            // Délai réduit pour éviter l'attente inutile
+            if (isMounted && !completionTimeout && !window.IKIGAI_ANALYSIS_COMPLETING) {
               completionTimeout = setTimeout(() => {
                 if (!isMounted) return;
                 
                 console.log("Finalisation de l'analyse");
                 if (onAnalysisComplete) {
-                  onAnalysisComplete(responses);
+                  // Marquer comme en cours de complétion pour éviter les doubles appels
+                  window.IKIGAI_ANALYSIS_COMPLETING = true;
+                  onAnalysisComplete(responsesToUse);
                 } else {
                   console.error("Erreur: callback onAnalysisComplete non disponible");
                   // En dernier recours, forcer un rafraîchissement
                   window.location.reload();
                 }
-              }, 1000);
+              }, 500); // Réduit à 500ms
+            } else if (window.IKIGAI_ANALYSIS_COMPLETING) {
+              console.log("Analyse déjà en cours de complétion, ignorée");
             }
             return true;
           }
@@ -169,7 +198,7 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
         
         // Vérifier immédiatement, puis configurer un intervalle
         if (!checkProgressAndFinish()) {
-          checkInterval = setInterval(checkProgressAndFinish, 300);
+          checkInterval = setInterval(checkProgressAndFinish, 200); // Vérification plus fréquente
           
           // Double sécurité: s'assurer que l'analyse se termine quoi qu'il arrive
           safetyTimeout = setTimeout(() => {
@@ -180,16 +209,12 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
             
             // Nettoyage
             if (checkInterval) clearInterval(checkInterval);
+            if (forceTimeout) clearTimeout(forceTimeout);
             
-            // Attendre très légèrement pour la mise à jour d'état
-            setTimeout(() => {
-              if (!isMounted) return;
-              
-              if (onAnalysisComplete) {
-                onAnalysisComplete(responses);
-              }
-            }, 100);
-          }, 10000); // 10 secondes maximum
+            if (onAnalysisComplete) {
+              onAnalysisComplete(responsesToUse);
+            }
+          }, 5000); // Réduit à 5 secondes maximum
         }
       } catch (err) {
         console.error("Erreur critique lors de l'analyse:", err);
@@ -197,23 +222,20 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
           setError("Une erreur est survenue. Nous finalisons votre profil...");
         }
         
-        // Même en cas d'erreur critique, continuer
+        // Même en cas d'erreur critique, continuer rapidement
         setTimeout(() => {
           if (!isMounted) return;
           
           // Forcer la progression à 100%
           setProgress(100);
           
-          // Attendre légèrement puis finaliser
-          setTimeout(() => {
-            if (!isMounted) return;
-            
-            if (onAnalysisComplete) {
-              console.log("Finalisation après erreur");
-              onAnalysisComplete(responses);
-            }
-          }, 500);
-        }, 1500);
+          if (onAnalysisComplete) {
+            console.log("Finalisation après erreur");
+            onAnalysisComplete(responses || {});
+          } else {
+            window.location.reload();
+          }
+        }, 1000);
       }
     };
     
@@ -227,6 +249,8 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
       if (safetyTimeout) clearTimeout(safetyTimeout);
       if (completionTimeout) clearTimeout(completionTimeout);
       console.log("Nettoyage des ressources de l'analyse");
+      // Réinitialiser le flag d'analyse en cours
+      window.IKIGAI_ANALYSIS_PERFORMING = false;
     };
   }, []); // Dépendance vide pour n'exécuter qu'une seule fois
            // Les réponses sont accessibles via la prop et ne changeront pas

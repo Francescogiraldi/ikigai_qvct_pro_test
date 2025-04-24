@@ -326,6 +326,15 @@ function App() {
   
   // Gérer la complétion de l'onboarding
   const handleOnboardingComplete = async (responses) => {
+    // Protéger contre les appels multiples
+    if (window.IKIGAI_ONBOARDING_COMPLETING) {
+      console.log("Détection d'appel multiple à handleOnboardingComplete, ignoré");
+      return;
+    }
+    
+    // Marquer comme en cours pour éviter les appels multiples
+    window.IKIGAI_ONBOARDING_COMPLETING = true;
+    
     try {
       console.log("App: Complétion de l'onboarding avec réponses:", responses);
       
@@ -335,129 +344,114 @@ function App() {
         completedAt: responses.completedAt || new Date().toISOString()
       };
       
-      // 1. Stocker les réponses d'abord pour qu'elles soient disponibles
-      // immédiatement quand la page d'analyse sera affichée
+      // IMPORTANT: Désactiver IMMÉDIATEMENT l'écran d'onboarding pour éviter l'impression de blocage
+      setShowOnboarding(false);
+      
+      // Stocker les réponses pour la page d'analyse
       setOnboardingResponses(responsesWithTimestamp);
       
-      // 2. Marquer l'onboarding comme complété dans différents stockages pour redondance
+      // Marquer l'onboarding comme complété avec une couche de redondance
       try {
         // Dans localStorage pour persistance entre sessions
         localStorage.setItem('onboardingCompleted', 'true');
         localStorage.setItem('onboardingCompletedAt', responsesWithTimestamp.completedAt);
-        
-        // Dans sessionStorage pour la session courante
         sessionStorage.setItem('onboardingCompleted', 'true');
-        
-        // Dans une variable globale pour accès immédiat
         window.IKIGAI_ONBOARDING_COMPLETED = true;
         window.IKIGAI_ONBOARDING_TIMESTAMP = responsesWithTimestamp.completedAt;
-      } catch (storageError) {
-        console.warn("Erreur de stockage local:", storageError);
-      }
-      
-      // 3. Effacer les flags de visibilité de l'onboarding
-      try {
+        
+        // Nettoyer les autres flags
         localStorage.removeItem('ikigai_onboarding_active');
         localStorage.removeItem('ikigai_onboarding_visible');
         window.IKIGAI_ONBOARDING_ACTIVE = false;
         window.IKIGAI_ONBOARDING_VISIBLE = false;
-      } catch (e) {
-        console.warn("Erreur nettoyage variables onboarding:", e);
+      } catch (storageError) {
+        console.warn("Erreur de stockage local (non bloquant):", storageError);
       }
       
-      // 4. Désactiver TOUS les autres écrans en une seule opération atomique
+      // Désactiver tous les autres écrans
       console.log("Désactivation des écrans précédents");
       setShowWelcome(false);
       setShowSignup(false);
-      setShowOnboarding(false);
       setSelectedIsland(null);
       setIsLoading(false);
       
-      // 5. IMPORTANT: Petit délai avant d'activer la page d'analyse pour permettre
-      // au React de finaliser la mise à jour des états précédents
-      console.log("Préparation de l'activation de la page d'analyse");
+      // Activer directement la page d'analyse
+      console.log("Activation immédiate de la page d'analyse");
+      setShowOnboardingAnalysis(true);
+      
+      // Délai pour réinitialiser le flag de protection
       setTimeout(() => {
-        // Activer la page d'analyse d'onboarding
-        setShowOnboardingAnalysis(true);
-        console.log("Activation de la page d'analyse d'onboarding effectuée");
-      }, 100);
+        window.IKIGAI_ONBOARDING_COMPLETING = false;
+      }, 500);
       
     } catch (error) {
       console.error("Erreur lors de la complétion de l'onboarding:", error);
       
-      // En cas d'erreur, utiliser une approche plus robuste
-      // 1. Réinitialiser tous les écrans
+      // En cas d'erreur, simplifier au maximum la transition
+      // Désactiver tous les écrans
       setShowWelcome(false);
       setShowSignup(false);
       setShowOnboarding(false);
       setShowOnboardingAnalysis(false);
       setIsLoading(false);
       
-      // 2. Petit délai avant de rediriger vers la page d'analyse
-      setTimeout(() => {
-        // Stocker les réponses même en cas d'erreur
-        if (!onboardingResponses && responses) {
-          setOnboardingResponses({
-            ...responses,
-            completedAt: new Date().toISOString(),
-            recoveryMode: true
-          });
-        }
-        
-        // Activer la page d'analyse en mode de secours
-        setShowOnboardingAnalysis(true);
-        console.log("Récupération après erreur: page d'analyse activée");
-      }, 200);
+      // Préparer des réponses de secours
+      const fallbackResponses = {
+        ...(responses || {}),
+        completedAt: new Date().toISOString(),
+        recoveryMode: true
+      };
+      
+      // Stocker les réponses de secours
+      setOnboardingResponses(fallbackResponses);
+      
+      // Activer directement la page d'analyse
+      setShowOnboardingAnalysis(true);
+      console.log("Récupération après erreur: page d'analyse activée directement");
+      
+      // Réinitialiser le flag de protection
+      window.IKIGAI_ONBOARDING_COMPLETING = false;
     }
   };
   
   // Gérer la fin de l'analyse
   const handleAnalysisComplete = async (responses) => {
-    // Marquer immédiatement la fonction comme en cours d'exécution pour éviter les appels multiples
+    // Protection contre les appels multiples
+    if (window.IKIGAI_ANALYSIS_COMPLETING) {
+      console.log("Détection d'appel multiple à handleAnalysisComplete, ignoré");
+      return;
+    }
+    
+    // Marquer immédiatement comme en cours d'exécution
     window.IKIGAI_ANALYSIS_COMPLETING = true;
     
     try {
       console.log("App: Analyse terminée pour les réponses");
       
-      // 1. Préparation des données de progression avec robustesse
-      let updatedProgress = {...(progress || {})};
+      // CRUCIAL: D'abord désactiver IMMÉDIATEMENT la page d'analyse
+      // pour éviter l'impression de blocage
+      setShowOnboardingAnalysis(false);
       
-      // Assurer que toutes les structures nécessaires existent
+      // Mise à jour des données en mémoire
+      let updatedProgress = {...(progress || {})};
       updatedProgress.totalPoints = updatedProgress.totalPoints || 0;
       updatedProgress.moduleResponses = updatedProgress.moduleResponses || {};
       updatedProgress.completedModules = updatedProgress.completedModules || [];
-      
-      // Ajouter des points pour avoir complété l'onboarding
       updatedProgress.totalPoints += 200;
-      
-      // S'assurer que l'onboarding est marqué comme complété avec un timestamp
       updatedProgress.moduleResponses.onboarding = {
         ...responses,
         completedAt: responses.completedAt || new Date().toISOString(),
         pointsAwarded: 200
       };
-      
-      // Ajouter l'onboarding à la liste des modules complétés s'il n'y est pas déjà
       if (!updatedProgress.completedModules.includes('onboarding')) {
         updatedProgress.completedModules.push('onboarding');
       }
       
-      // 2. Sauvegarder la progression de manière asynchrone - ne pas bloquer la suite
-      API.progress.saveProgress(updatedProgress)
-        .then(() => {
-          console.log("Progression sauvegardée avec succès");
-          // Mettre à jour l'état local uniquement après sauvegarde réussie
-          setProgress(updatedProgress);
-        })
-        .catch(saveError => {
-          console.warn("Erreur de sauvegarde:", saveError);
-          // En cas d'échec, mettre quand même à jour l'état local
-          setProgress(updatedProgress);
-        });
+      // Mettre à jour l'état local IMMÉDIATEMENT
+      setProgress(updatedProgress);
       
-      // 3. Nettoyer toutes les variables et états liés à l'onboarding
+      // Nettoyer toutes les variables et états
       try {
-        // Nettoyer localStorage et sessionStorage
         const keysToRemove = [
           'onboarding_pending_responses',
           'onboarding_responses_timestamp',
@@ -474,40 +468,43 @@ function App() {
           }
         });
         
-        // Nettoyer les variables globales
         window.IKIGAI_ANALYSIS_ACTIVE = false;
         window.IKIGAI_ONBOARDING_ACTIVE = false;
       } catch (cleanupError) {
-        console.warn("Erreur de nettoyage:", cleanupError);
+        console.warn("Erreur de nettoyage (non bloquant):", cleanupError);
       }
       
-      // 4. IMPORTANT: Transition atomique vers la page principale
-      // Nous utilisons un délai pour assurer que les autres états ont été traités
-      console.log("Préparation transition page principale");
+      // Réinitialiser IMMÉDIATEMENT tous les états de navigation
+      setOnboardingResponses(null);
+      setShowWelcome(false);
+      setShowSignup(false);
+      setShowOnboarding(false);
+      setIsLoading(false);
+      setSelectedIsland(null);
       
-      // D'abord désactiver la page d'analyse
-      setShowOnboardingAnalysis(false);
-      
-      // Ensuite, après un court délai, désactiver tous les autres états
-      // pour s'assurer que les changements d'états sont traités correctement
+      // Sauvegarder en arrière-plan sans bloquer l'utilisateur
       setTimeout(() => {
-        // Réinitialiser complètement tous les états de navigation
-        setOnboardingResponses(null);
-        setShowWelcome(false);
-        setShowSignup(false);
-        setShowOnboarding(false);
-        setIsLoading(false);
-        setSelectedIsland(null);
-        
-        // Marquer que l'opération est terminée
-        window.IKIGAI_ANALYSIS_COMPLETING = false;
-        console.log("Transition vers la page principale terminée");
-      }, 300);
+        API.progress.saveProgress(updatedProgress)
+          .then(() => {
+            console.log("Progression sauvegardée avec succès");
+          })
+          .catch(saveError => {
+            console.warn("Erreur de sauvegarde (non bloquant):", saveError);
+          });
+          
+        // Réinitialiser le flag de complétion après un délai
+        setTimeout(() => {
+          window.IKIGAI_ANALYSIS_COMPLETING = false;
+          console.log("Flag IKIGAI_ANALYSIS_COMPLETING réinitialisé");
+        }, 500);
+      }, 100);
+      
+      console.log("Transition vers la page principale terminée");
       
     } catch (error) {
       console.error("Erreur critique lors de la finalisation de l'analyse:", error);
       
-      // Plan de secours - réinitialiser tous les états
+      // Plan de secours - réinitialiser IMMÉDIATEMENT tous les états
       setShowOnboardingAnalysis(false);
       setOnboardingResponses(null);
       setShowWelcome(false);
@@ -515,13 +512,46 @@ function App() {
       setShowOnboarding(false);
       setIsLoading(false);
       
-      // Marquer que l'opération est terminée même en cas d'erreur
-      window.IKIGAI_ANALYSIS_COMPLETING = false;
+      // Réinitialiser le flag même en cas d'erreur
+      setTimeout(() => {
+        window.IKIGAI_ANALYSIS_COMPLETING = false;
+      }, 100);
     }
   };
   
   // Affichage pendant le chargement
   if (isLoading) {
+    // Vérifier si on est bloqué dans un état d'onboarding ou d'analyse
+    const hasOnboardingLoop = localStorage.getItem('ikigai_onboarding_active') === 'true' && 
+                             localStorage.getItem('onboardingCompleted') === 'true';
+    const hasAnalysisLoop = localStorage.getItem('ikigai_analysis_active') === 'true' &&
+                          localStorage.getItem('onboardingCompleted') === 'true';
+                          
+    // Si on détecte une boucle, nettoyer les variables d'état
+    if (hasOnboardingLoop || hasAnalysisLoop) {
+      console.log("Détection d'une boucle de chargement, nettoyage des variables d'état");
+      
+      // Nettoyer localStorage
+      localStorage.removeItem('ikigai_onboarding_active');
+      localStorage.removeItem('ikigai_onboarding_visible');
+      localStorage.removeItem('ikigai_analysis_active');
+      
+      // Réinitialiser les variables globales
+      window.IKIGAI_ONBOARDING_ACTIVE = false;
+      window.IKIGAI_ONBOARDING_VISIBLE = false;
+      window.IKIGAI_ANALYSIS_ACTIVE = false;
+      window.IKIGAI_ONBOARDING_COMPLETING = false;
+      window.IKIGAI_ANALYSIS_COMPLETING = false;
+      window.IKIGAI_ANALYSIS_PERFORMING = false;
+      window.IKIGAI_SAVING_ONBOARDING = false;
+      
+      // Forcer l'arrivée à la page principale
+      setShowOnboarding(false);
+      setShowOnboardingAnalysis(false);
+      // Programmer la fin du chargement après un court délai
+      setTimeout(() => setIsLoading(false), 1000);
+    }
+    
     return (
       <div className="flex items-center justify-center h-screen flex-col bg-gray-50">
         <div className="flex items-center">

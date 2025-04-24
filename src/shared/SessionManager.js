@@ -153,17 +153,45 @@ class SessionManager {
    */
   static async tryRenewSession() {
     try {
-      const { data, error } = await supabase.auth.refreshSession();
+      // Timeout de sécurité pour éviter le blocage
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Timeout lors du renouvellement de session")), 3000)
+      );
       
-      if (error || !data.session) {
+      // Utiliser Promise.race pour limiter le temps d'attente
+      const sessionPromise = supabase.auth.refreshSession();
+      const result = await Promise.race([sessionPromise, timeoutPromise]);
+      
+      const { data, error } = result;
+      
+      if (error || !data || !data.session) {
+        console.warn("Échec du renouvellement de session:", error?.message || "Pas de session valide retournée");
         return false;
       }
       
       // Créer une nouvelle session avec les données fraîches
       this.createSession(data.user);
+      
+      // Nettoyer les flags de session précédente
+      try {
+        localStorage.removeItem('ikigai_session_error');
+        localStorage.removeItem('ikigai_session_recovery_attempt');
+      } catch (e) {
+        // Ignorer les erreurs de nettoyage
+      }
+      
       return true;
     } catch (e) {
       console.warn("Impossible de renouveler la session:", e);
+      
+      // Marquer l'erreur dans localStorage pour récupération ultérieure
+      try {
+        localStorage.setItem('ikigai_session_error', e.message || 'Unknown error');
+        localStorage.setItem('ikigai_session_recovery_attempt', Date.now().toString());
+      } catch (storageError) {
+        // Ignorer les erreurs de stockage
+      }
+      
       return false;
     }
   }

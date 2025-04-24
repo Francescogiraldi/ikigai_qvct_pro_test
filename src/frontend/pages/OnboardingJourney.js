@@ -339,102 +339,107 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
         responsesPresent: !!responses
       });
       
-      // Récupérer l'utilisateur actuel directement (moins d'étapes)
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      // Si erreur d'authentification, tenter une récupération simple
-      if (userError || !user) {
-        console.error("Erreur d'authentification:", userError || "Aucun utilisateur trouvé");
-        
-        // Vérifions si nous pouvons récupérer une session valide
-        const { data: sessionData } = await supabase.auth.getSession();
-        
-        if (!sessionData?.session) {
-          // En mode de secours, stocker les données en local et continuer
-          try {
-            localStorage.setItem('onboarding_pending_responses', JSON.stringify(responses));
-            localStorage.setItem('onboarding_responses_timestamp', new Date().toISOString());
-            console.log("Réponses sauvegardées localement en secours");
-          } catch (e) {
-            console.warn("Impossible de sauvegarder les réponses localement:", e);
-          }
-          
-          // Continuer malgré l'erreur d'authentification
-          console.log("Poursuite du flux sans sauvegarde Supabase");
-        }
-      }
-
-      // Si l'utilisateur est disponible, procéder à l'enregistrement
-      if (user) {
-        // Préparer les données pour l'insertion
-        const responseData = {
-          user_id: user.id,
-          responses: responses,
-          updated_at: new Date().toISOString(),
-        };
-        
-        // Upsert dans les deux tables en parallèle pour plus d'efficacité
-        await Promise.allSettled([
-          // Tentative avec onboarding_responses
-          supabase
-            .from('onboarding_responses')
-            .upsert([responseData], { onConflict: 'user_id' }),
-            
-          // Tentative avec user_responses (pour compatibilité)
-          supabase
-            .from('user_responses')
-            .upsert([{
-              user_id: user.id,
-              module_id: 'onboarding',
-              responses: responses,
-              created_at: new Date().toISOString()
-            }], { onConflict: 'user_id,module_id' }),
-            
-          // Mise à jour de la progression
-          supabase
-            .from('user_progress')
-            .upsert([{
-              user_id: user.id,
-              onboarding_completed: true,
-              onboarding_completed_at: new Date().toISOString(),
-            }], { onConflict: 'user_id' })
-        ]);
-        
-        console.log("Données envoyées avec succès à Supabase");
-      }
-      
-      // Assurer une transition propre même en cas d'échec de sauvegarde
-      // Pour garantir l'expérience utilisateur, ajouter une indication dans localStorage
+      // Stocker dans localStorage immédiatement pour plus de résilience
       try {
         localStorage.setItem('onboardingCompleted', 'true');
         localStorage.setItem('onboardingCompletedAt', new Date().toISOString());
+        localStorage.setItem('onboarding_pending_responses', JSON.stringify(responses));
       } catch (e) {
         console.warn("Erreur localStorage:", e);
       }
-      
-      // IMPORTANT: Délai court avant d'appeler le callback pour laisser le temps aux transitions de s'initialiser
-      setTimeout(() => {
-        // Appeler le callback de complétion
-        if (onComplete) {
-          console.log("Appel du callback onComplete avec les réponses");
+
+      // IMPORTANT: Vérifier l'état de soumission pour éviter les doubles appels
+      // et appeler le callback immédiatement avec les réponses
+      // pour éviter tout blocage même si les opérations de sauvegarde échouent
+      if (onComplete && !window.IKIGAI_ONBOARDING_COMPLETING) {
+        // Marquer comme en cours de complétion pour éviter les doubles appels
+        window.IKIGAI_ONBOARDING_COMPLETING = true;
+        console.log("Appel du callback onComplete avec les réponses");
+        // Utiliser un délai court pour s'assurer que l'interface a eu le temps de mettre à jour
+        setTimeout(() => {
           onComplete({
             ...responses,
             completedAt: new Date().toISOString() // Garantir un timestamp de complétion
           });
-        } else {
-          console.error("ERREUR CRITIQUE: Callback onComplete non disponible");
+        }, 50);
+      } else if (!onComplete) {
+        console.error("ERREUR CRITIQUE: Callback onComplete non disponible");
+        // Force reload in case of missing callback
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        console.warn("Détection de double appel à submitResponses, ignoré");
+      }
+      
+      // Nettoyer les drapeaux de l'onboarding après un délai
+      try {
+        localStorage.removeItem('ikigai_onboarding_active');
+        localStorage.removeItem('ikigai_onboarding_visible');
+        window.IKIGAI_ONBOARDING_ACTIVE = false;
+        window.IKIGAI_ONBOARDING_VISIBLE = false;
+      } catch (e) {
+        console.warn("Erreur nettoyage variables onboarding:", e);
+      }
+      
+      // Exécuter la sauvegarde Supabase en arrière-plan sans bloquer l'utilisateur
+      setTimeout(async () => {
+        try {
+          // Récupérer l'utilisateur actuel
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          
+          if (userError || !user) {
+            console.error("Erreur d'authentification:", userError || "Aucun utilisateur trouvé");
+            return; // Terminer car l'utilisateur est déjà passé à la page suivante
+          }
+
+          // Si l'utilisateur est disponible, procéder à l'enregistrement
+          if (user) {
+            // Préparer les données pour l'insertion
+            const responseData = {
+              user_id: user.id,
+              responses: responses,
+              updated_at: new Date().toISOString(),
+            };
+            
+            // Tentative avec user_responses (prioritaire pour compatibilité avec trigger)
+            await supabase
+              .from('user_responses')
+              .upsert([{
+                user_id: user.id,
+                module_id: 'onboarding',
+                responses: responses,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }], { onConflict: 'user_id,module_id' });
+              
+            // Mise à jour de la progression  
+            await supabase
+              .from('user_progress')
+              .upsert([{
+                user_id: user.id,
+                onboarding_completed: true,
+                onboarding_completed_at: new Date().toISOString(),
+              }], { onConflict: 'user_id' });
+            
+            console.log("Données envoyées avec succès à Supabase");
+          }
+        } catch (error) {
+          console.error("Erreur non-bloquante lors de la sauvegarde Supabase:", error);
+          // Ne pas afficher d'erreur car l'utilisateur est déjà passé à la page suivante
+        } finally {
+          setIsSubmitting(false);
+          setIsCompleting(false);
         }
-      }, 200);
+      }, 100);
       
     } catch (error) {
       console.error("Erreur lors de la soumission des réponses:", error);
-      setError("Une erreur est survenue lors de la sauvegarde. Veuillez réessayer.");
+      setError("Une erreur est survenue. Nous allons continuer automatiquement...");
       
-      // En cas d'erreur, essayer quand même de continuer après un délai
+      // En cas d'erreur critique, toujours assurer la continuité pour l'utilisateur
       setTimeout(() => {
         setError(null);
         
-        // Tentative de récupération - appeler le callback même en cas d'erreur
+        // Appeler le callback même en cas d'erreur
         if (onComplete) {
           console.log("Tentative de récupération après erreur");
           onComplete({
@@ -442,10 +447,13 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
             completedAt: new Date().toISOString(),
             errorRecovery: true // Marquer que c'est une récupération d'erreur
           });
+        } else {
+          // Dernier recours: rechargement de la page pour essayer de récupérer
+          window.location.reload();
         }
-      }, 3000);
+      }, 2000);
     } finally {
-      // S'assurer de réinitialiser les états même en cas d'erreur
+      // S'assurer de réinitialiser les états après un délai
       setTimeout(() => {
         setIsSubmitting(false);
         setIsCompleting(false);
