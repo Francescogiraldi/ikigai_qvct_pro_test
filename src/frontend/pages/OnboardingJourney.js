@@ -441,7 +441,7 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
                 responses: preparedResponses,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
-              }], { onConflict: 'user_id,module_id' }),
+              }], { onConflict: ['user_id', 'module_id'] }),
               
             // 2. Mise à jour de la progression utilisateur
             supabase
