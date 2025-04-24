@@ -72,46 +72,77 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
     };
   }, [currentStep]); // Dépendance sur currentStep pour réagir aux changements d'étape
 
-  // Effet pour effectuer l'analyse réelle des données
+  // Effet pour effectuer l'analyse réelle des données - Version améliorée
   useEffect(() => {
     // Variable pour suivre si le composant est monté
     let isMounted = true;
-    // Références aux intervalles et timeouts pour pouvoir les nettoyer
+    // Références aux intervalles et timeouts pour le nettoyage
     let checkInterval = null;
     let safetyTimeout = null;
     let completionTimeout = null;
+    let forceTimeout = null;
     
-    // Éviter de démarrer plusieurs fois l'analyse
+    // Éviter de démarrer plusieurs fois l'analyse avec protection renforcée
     if (window.IKIGAI_ANALYSIS_PERFORMING) {
       console.log("Analyse déjà en cours, ignorée");
       return;
     }
     
+    // Vérifier si l'onboarding est déjà complet (double vérification)
+    const isOnboardingAlreadyCompleted = localStorage.getItem('onboardingCompleted') === 'true' && 
+                                        localStorage.getItem('ikigai_analysis_completed') === 'true';
+    
+    if (isOnboardingAlreadyCompleted) {
+      console.log("Onboarding et analyse déjà marqués comme complétés, redirection rapide");
+      // Délai minimal pour permettre l'affichage visuel
+      setTimeout(() => {
+        if (onAnalysisComplete && isMounted) {
+          // Récupérer les réponses stockées ou utiliser des réponses minimales
+          const storedResponses = localStorage.getItem('onboarding_pending_responses');
+          const responsesToUse = storedResponses ? JSON.parse(storedResponses) : responses || {};
+          onAnalysisComplete(responsesToUse);
+        }
+      }, 500);
+      return;
+    }
+    
+    // Marquer immédiatement l'analyse comme en cours
     window.IKIGAI_ANALYSIS_PERFORMING = true;
+    localStorage.setItem('ikigai_analysis_active', 'true');
     
     const performAnalysis = async () => {
       try {
-        // Force timeout for safety - ensure the analysis always completes
-        let forceTimeout = setTimeout(() => {
+        // SÉCURITÉ: Toujours terminer l'analyse après un délai maximum (6s)
+        forceTimeout = setTimeout(() => {
           if (isMounted) {
-            console.log("FORCE TIMEOUT: Forçage de la finalisation de l'analyse après 8s");
+            console.log("FORCE TIMEOUT: Finalisation de l'analyse après 6s");
             setProgress(100);
             
-            if (onAnalysisComplete && !window.IKIGAI_ANALYSIS_COMPLETING) {
+            // Éviter les appels multiples
+            if (!window.IKIGAI_ANALYSIS_COMPLETING) {
               window.IKIGAI_ANALYSIS_COMPLETING = true;
-              onAnalysisComplete(responses || {});
-            } else if (!onAnalysisComplete) {
-              window.location.reload();
+              
+              // Récupérer les réponses à utiliser
+              const responsesToComplete = responses || {};
+              
+              // S'assurer que l'animation est à 100%
+              setTimeout(() => {
+                if (isMounted && onAnalysisComplete) {
+                  onAnalysisComplete(responsesToComplete);
+                }
+              }, 500);
             }
           }
-        }, 8000); // Force completion after 8 seconds max
+        }, 6000); // Réduit à 6 secondes max pour une meilleure expérience utilisateur
         
-        // Vérification robuste des réponses
+        // Récupération robuste des réponses à analyser
         let responsesToUse = responses;
+        
+        // Si on n'a pas de réponses valides, tenter plusieurs méthodes de récupération
         if (!responsesToUse || Object.keys(responsesToUse).length === 0) {
-          console.warn("Réponses vides ou invalides pour l'analyse");
+          console.warn("Réponses vides, tentative de récupération");
           
-          // Tentative de récupération depuis le localStorage
+          // Méthode 1: localStorage
           try {
             const storedResponses = localStorage.getItem('onboarding_pending_responses');
             if (storedResponses) {
@@ -119,12 +150,26 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
               console.log("Réponses récupérées depuis localStorage");
             }
           } catch (e) {
-            console.warn("Échec de récupération des réponses:", e);
+            console.warn("Échec récupération localStorage:", e);
           }
           
-          // Si on n'a toujours pas de réponses, créer un objet minimal
+          // Méthode 2: SessionManager (si disponible dans window)
+          if ((!responsesToUse || Object.keys(responsesToUse).length === 0) && 
+              window.SessionManager && typeof window.SessionManager.getOnboardingStatus === 'function') {
+            try {
+              const status = window.SessionManager.getOnboardingStatus();
+              if (status && status.responses) {
+                responsesToUse = status.responses;
+                console.log("Réponses récupérées depuis SessionManager");
+              }
+            } catch (e) {
+              console.warn("Échec récupération SessionManager:", e);
+            }
+          }
+          
+          // Solution de dernier recours: objet minimal
           if (!responsesToUse || Object.keys(responsesToUse).length === 0) {
-            console.warn("Création d'un objet de réponses minimal pour continuer");
+            console.warn("Création d'un objet de réponses minimal");
             responsesToUse = {
               recoveryMode: true,
               timestamp: new Date().toISOString()
@@ -132,128 +177,135 @@ const OnboardingAnalysisPage = ({ responses, onAnalysisComplete }) => {
           }
         }
         
-        console.log("Démarrage de l'analyse des réponses:", Object.keys(responsesToUse).length);
+        console.log("Démarrage de l'analyse avec", Object.keys(responsesToUse).length, "réponses");
         
-        // Lancer les opérations asynchrones en arrière-plan sans attendre
-        // Éviter le blocage même si ces opérations échouent
-        setTimeout(() => {
-          // 1. Sauvegarder les réponses dans le stockage
-          API.progress.saveModuleResponses('onboarding', responsesToUse)
-            .then(() => console.log("Sauvegarde des réponses réussie"))
-            .catch(e => console.warn("Échec sauvegarde des réponses, non bloquant:", e));
-          
-          // 2. Analyse des réponses par le service IA
-          API.auth.getCurrentUser()
-            .then(data => {
-              if (data && data.user) {
-                console.log("Utilisateur identifié pour l'analyse:", data.user.id);
-                return API.ai.analyzeUserResponses(data.user.id)
-                  .catch(e => console.warn("Erreur analyse IA, non bloquant:", e));
-              }
-              console.log("Pas d'utilisateur identifié, analyse ignorée");
-            })
-            .catch(e => console.warn("Erreur récupération utilisateur, non bloquant:", e));
-        }, 100);
+        // OPTIMISATION: Lancer les opérations en parallèle sans bloquer l'UI
+        Promise.resolve().then(async () => {
+          try {
+            // Sauvegarder les réponses dans le stockage
+            await API.progress.saveModuleResponses('onboarding', responsesToUse)
+              .then(() => console.log("Sauvegarde des réponses réussie"))
+              .catch(e => console.warn("Échec sauvegarde, non bloquant:", e));
+            
+            // Analyse par le service IA (parallèle et non bloquant)
+            const user = await API.auth.getCurrentUser().catch(() => null);
+            if (user && user.id) {
+              API.ai.analyzeUserResponses(user.id)
+                .then(() => console.log("Analyse IA réussie"))
+                .catch(e => console.warn("Erreur analyse IA (non bloquant):", e));
+            }
+          } catch (e) {
+            console.warn("Erreur dans les opérations en arrière-plan (non bloquant):", e);
+          }
+        });
         
-        // 3. Observer la progression de l'animation sans bloquer
+        // Observer la progression de l'animation pour une transition fluide
         const checkProgressAndFinish = () => {
-          if (!isMounted) return true; // Arrêter si le composant n'est plus monté
+          if (!isMounted) return true;
           
-          // Vérifier si l'animation est complète
           if (progress >= 100) {
             console.log("Animation terminée, préparation de la finalisation");
             
-            // Nettoyer les intervalles et timeouts
+            // Nettoyer les intervalles et timeouts actifs
             if (checkInterval) clearInterval(checkInterval);
             if (safetyTimeout) clearTimeout(safetyTimeout);
             if (forceTimeout) clearTimeout(forceTimeout);
             
-            // Stabiliser la progression à 100% pour l'animation finale
-            setProgress(100);
+            // Marquer la complétion dans localStorage pour éviter les répétitions
+            try {
+              localStorage.setItem('ikigai_analysis_completed', 'true');
+              localStorage.setItem('ikigai_analysis_completed_at', new Date().toISOString());
+            } catch (e) {
+              console.warn("Erreur localStorage (non bloquant):", e);
+            }
             
-            // Attendre un peu pour l'animation finale et déclencher la complétion
-            // Délai réduit pour éviter l'attente inutile
+            // Attendre un court délai pour l'animation finale
             if (isMounted && !completionTimeout && !window.IKIGAI_ANALYSIS_COMPLETING) {
               completionTimeout = setTimeout(() => {
                 if (!isMounted) return;
                 
                 console.log("Finalisation de l'analyse");
+                
+                // Protection contre appels multiples
+                window.IKIGAI_ANALYSIS_COMPLETING = true;
+                
                 if (onAnalysisComplete) {
-                  // Marquer comme en cours de complétion pour éviter les doubles appels
-                  window.IKIGAI_ANALYSIS_COMPLETING = true;
                   onAnalysisComplete(responsesToUse);
                 } else {
-                  console.error("Erreur: callback onAnalysisComplete non disponible");
-                  // En dernier recours, forcer un rafraîchissement
-                  window.location.reload();
+                  console.error("Callback onAnalysisComplete non disponible");
+                  window.location.href = '/'; // Redirection vers la page principale
                 }
-              }, 500); // Réduit à 500ms
-            } else if (window.IKIGAI_ANALYSIS_COMPLETING) {
-              console.log("Analyse déjà en cours de complétion, ignorée");
+              }, 300); // Délai minimal pour la fluidité visuelle
             }
             return true;
           }
           return false;
         };
         
-        // Vérifier immédiatement, puis configurer un intervalle
+        // Vérifier immédiatement, puis configurer une vérification périodique
         if (!checkProgressAndFinish()) {
-          checkInterval = setInterval(checkProgressAndFinish, 200); // Vérification plus fréquente
+          checkInterval = setInterval(checkProgressAndFinish, 150);
           
-          // Double sécurité: s'assurer que l'analyse se termine quoi qu'il arrive
+          // Sécurité secondaire avec timer indépendant
           safetyTimeout = setTimeout(() => {
             if (!isMounted) return;
             
-            console.log("Timeout de sécurité déclenché pour finaliser l'analyse");
-            setProgress(100); // Forcer la progression à 100%
+            console.log("Activation du filet de sécurité");
+            setProgress(100); // Forcer la progression complète
             
-            // Nettoyage
+            // Nettoyage des ressources
             if (checkInterval) clearInterval(checkInterval);
             if (forceTimeout) clearTimeout(forceTimeout);
             
-            if (onAnalysisComplete) {
-              onAnalysisComplete(responsesToUse);
-            }
-          }, 5000); // Réduit à 5 secondes maximum
+            // Attendre un court délai avant de finaliser
+            setTimeout(() => {
+              if (isMounted && onAnalysisComplete && !window.IKIGAI_ANALYSIS_COMPLETING) {
+                window.IKIGAI_ANALYSIS_COMPLETING = true;
+                onAnalysisComplete(responsesToUse);
+              }
+            }, 200);
+          }, 4000); // 4 secondes maximum
         }
       } catch (err) {
         console.error("Erreur critique lors de l'analyse:", err);
+        
         if (isMounted) {
-          setError("Une erreur est survenue. Nous finalisons votre profil...");
+          setError("Une erreur est survenue. Finalisation de votre profil...");
+          setProgress(100); // Forcer la progression
         }
         
-        // Même en cas d'erreur critique, continuer rapidement
+        // Récupération rapide en cas d'erreur
         setTimeout(() => {
           if (!isMounted) return;
           
-          // Forcer la progression à 100%
-          setProgress(100);
-          
-          if (onAnalysisComplete) {
-            console.log("Finalisation après erreur");
-            onAnalysisComplete(responses || {});
-          } else {
-            window.location.reload();
+          if (onAnalysisComplete && !window.IKIGAI_ANALYSIS_COMPLETING) {
+            window.IKIGAI_ANALYSIS_COMPLETING = true;
+            // Utiliser les réponses disponibles ou un objet minimal
+            const fallbackResponses = responses || { recoveryMode: true, timestamp: new Date().toISOString() };
+            onAnalysisComplete(fallbackResponses);
+          } else if (!onAnalysisComplete) {
+            window.location.href = '/'; // Redirection de secours
           }
-        }, 1000);
+        }, 800);
       }
     };
     
     // Démarrer l'analyse
     performAnalysis();
     
-    // Nettoyage à la démonture du composant
+    // Nettoyage à la démontage du composant
     return () => {
       isMounted = false;
-      if (checkInterval) clearInterval(checkInterval);
-      if (safetyTimeout) clearTimeout(safetyTimeout);
-      if (completionTimeout) clearTimeout(completionTimeout);
+      // Nettoyer toutes les ressources
+      [checkInterval, safetyTimeout, completionTimeout, forceTimeout].forEach(timer => {
+        if (timer) clearTimeout(timer);
+      });
+      
       console.log("Nettoyage des ressources de l'analyse");
-      // Réinitialiser le flag d'analyse en cours
+      // Réinitialiser le flag d'analyse
       window.IKIGAI_ANALYSIS_PERFORMING = false;
     };
   }, []); // Dépendance vide pour n'exécuter qu'une seule fois
-           // Les réponses sont accessibles via la prop et ne changeront pas
 
   // Composant pour les particules flottantes
   const FloatingParticles = () => {

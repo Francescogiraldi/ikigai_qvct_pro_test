@@ -7,8 +7,28 @@
 import CryptoJS from 'crypto-js';
 
 class SecureStorage {
-  // Clé de chiffrement (à remplacer par une clé environnementale)
-  static ENCRYPTION_KEY = process.env.REACT_APP_STORAGE_ENCRYPTION_KEY || 'default-dev-key-replace-in-production';
+  // Clé de chiffrement avec backup sécurisée
+  static getEncryptionKey() {
+    // Utiliser la clé d'environnement si disponible
+    if (process.env.REACT_APP_STORAGE_ENCRYPTION_KEY) {
+      return process.env.REACT_APP_STORAGE_ENCRYPTION_KEY;
+    }
+    
+    // Sinon, générer et stocker une clé temporaire pour la session
+    if (!window.IKIGAI_TEMP_ENCRYPTION_KEY) {
+      // Générer une clé aléatoire pour cette session uniquement
+      const randomKey = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      window.IKIGAI_TEMP_ENCRYPTION_KEY = randomKey;
+    }
+    
+    return window.IKIGAI_TEMP_ENCRYPTION_KEY;
+  }
+  
+  static get ENCRYPTION_KEY() {
+    return this.getEncryptionKey();
+  }
 
   // Génération d'une clé dérivée sécurisée à partir de la clé principale
   static getSecureKey() {

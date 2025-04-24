@@ -55,17 +55,26 @@ const options = {
                            url.includes('/rest/v1/') || 
                            url.includes('/storage/v1/'); 
        
-       if (requiresAuth) { 
-         // Récupérer la session active 
-         const { data } = await supabase.auth.getSession(); 
-         const session = data?.session; 
+       // CORRECTION: Éviter la boucle infinie en n'appelant pas getSession si la requête est déjà pour getSession
+       if (requiresAuth && !url.includes('/auth/v1/token')) { 
+         // Récupérer le token depuis localStorage ou sessionStorage directement pour éviter la boucle
+         let accessToken = null;
+         try {
+           const storedSession = localStorage.getItem('supabase.auth.token');
+           if (storedSession) {
+             const parsedSession = JSON.parse(storedSession);
+             accessToken = parsedSession?.currentSession?.access_token;
+           }
+         } catch (e) {
+           console.warn("Erreur lors de la récupération du token:", e);
+         }
          
          // Assurer que les headers sont initialisés 
          if (!options.headers) options.headers = {}; 
          
          // Ajouter les headers d'authentification si disponibles 
-         if (session?.access_token) { 
-           options.headers['Authorization'] = `Bearer ${session.access_token}`; 
+         if (accessToken) { 
+           options.headers['Authorization'] = `Bearer ${accessToken}`; 
            console.log(`Requête authentifiée: ${url.split('/').pop()}`); 
          } else { 
            console.warn(`Requête sans token: ${url.split('/').pop()}`); 
@@ -75,9 +84,9 @@ const options = {
          options.headers['apikey'] = supabaseAnonKey; 
        } 
        
-       // Définir un timeout raisonnable pour les requêtes 
+       // Définir un timeout plus court pour les requêtes (10s au lieu de 30s)
        const controller = new AbortController(); 
-       const timeoutId = setTimeout(() => controller.abort(), 30000); 
+       const timeoutId = setTimeout(() => controller.abort(), 10000); 
        
        const response = await fetch(url, { 
          ...options, 

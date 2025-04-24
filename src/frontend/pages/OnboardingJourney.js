@@ -310,7 +310,12 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
       setCurrentQuestion(0);
     } else {
       // Toutes les questions sont complétées
-      submitResponses();
+      // Éviter d'appeler submitResponses si déjà en cours
+      if (!isSubmitting && !isCompleting) {
+        setIsSubmitting(true);
+        setIsCompleting(true);
+        submitResponses();
+      }
     }
   };
   
@@ -325,139 +330,177 @@ const OnboardingJourney = ({ onComplete, onCancel }) => {
     }
   };
   
-  // Soumettre les réponses à Supabase
+  // Soumettre les réponses à Supabase - Version améliorée
   const submitResponses = async () => {
+    // Vérification améliorée des doubles appels
+    if (window.IKIGAI_ONBOARDING_COMPLETING) {
+      console.warn("Détection de double appel à submitResponses, ignoré");
+      return;
+    }
+    
+    // Vérifier si les données sont valides
+    if (!responses || Object.keys(responses).length === 0) {
+      console.error("Erreur: Aucune réponse à soumettre");
+      setError("Une erreur est survenue avec vos réponses. Nous allons réessayer...");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+    
+    // Marquer comme en cours de complétion immédiatement pour bloquer les appels multiples
+    window.IKIGAI_ONBOARDING_COMPLETING = true;
     setIsSubmitting(true);
     setIsCompleting(true);
     
     try {
       console.log("OnboardingJourney: Début de la soumission des réponses");
       
-      // TRAÇAGE: pour debugging
-      console.log("OnboardingJourney: Statut des réponses avant soumission:", {
-        responseCount: Object.keys(responses).length,
-        responsesPresent: !!responses
-      });
+      // Préparer les données
+      const preparedResponses = {
+        ...responses,
+        completedAt: new Date().toISOString()
+      };
       
-      // Stocker dans localStorage immédiatement pour plus de résilience
+      // Stocker dans localStorage pour résilience et récupération
       try {
         localStorage.setItem('onboardingCompleted', 'true');
-        localStorage.setItem('onboardingCompletedAt', new Date().toISOString());
-        localStorage.setItem('onboarding_pending_responses', JSON.stringify(responses));
+        localStorage.setItem('onboardingCompletedAt', preparedResponses.completedAt);
+        localStorage.setItem('onboarding_pending_responses', JSON.stringify(preparedResponses));
+        localStorage.setItem('onboarding_responses_timestamp', preparedResponses.completedAt);
       } catch (e) {
-        console.warn("Erreur localStorage:", e);
+        console.warn("Erreur localStorage (non-bloquant):", e);
       }
 
-      // IMPORTANT: Vérifier l'état de soumission pour éviter les doubles appels
-      // et appeler le callback immédiatement avec les réponses
-      // pour éviter tout blocage même si les opérations de sauvegarde échouent
-      if (onComplete && !window.IKIGAI_ONBOARDING_COMPLETING) {
-        // Marquer comme en cours de complétion pour éviter les doubles appels
-        window.IKIGAI_ONBOARDING_COMPLETING = true;
-        console.log("Appel du callback onComplete avec les réponses");
-        // Utiliser un délai court pour s'assurer que l'interface a eu le temps de mettre à jour
-        setTimeout(() => {
-          onComplete({
-            ...responses,
-            completedAt: new Date().toISOString() // Garantir un timestamp de complétion
-          });
-        }, 50);
-      } else if (!onComplete) {
-        console.error("ERREUR CRITIQUE: Callback onComplete non disponible");
-        // Force reload in case of missing callback
-        setTimeout(() => window.location.reload(), 1000);
-      } else {
-        console.warn("Détection de double appel à submitResponses, ignoré");
+      // OPTIMISATION: Synchroniser avec SessionManager avant d'appeler le callback
+      try {
+        if (window.SessionManager && typeof window.SessionManager.setOnboardingStatus === 'function') {
+          window.SessionManager.setOnboardingStatus(true, preparedResponses);
+        }
+      } catch (e) {
+        console.warn("Erreur SessionManager (non-bloquant):", e);
+      }
+
+      // IMPORTANT: Désactiver l'affichage de l'onboarding visuellement AVANT d'appeler le callback
+      // Cela permet d'éviter qu'il reste visible pendant la transition
+      const container = document.querySelector('.onboarding-journey-container');
+      if (container) {
+        container.style.opacity = '0.3';
+        container.style.pointerEvents = 'none';
       }
       
-      // Nettoyer les drapeaux de l'onboarding après un délai
+      // Nettoyer les drapeaux d'état de l'onboarding immédiatement
       try {
         localStorage.removeItem('ikigai_onboarding_active');
         localStorage.removeItem('ikigai_onboarding_visible');
         window.IKIGAI_ONBOARDING_ACTIVE = false;
         window.IKIGAI_ONBOARDING_VISIBLE = false;
       } catch (e) {
-        console.warn("Erreur nettoyage variables onboarding:", e);
+        console.warn("Erreur nettoyage variables (non-bloquant):", e);
+      }
+
+      // Appeler le callback avec les réponses - CRUCIAL: notification au parent
+      if (onComplete) {
+        console.log("Appel du callback onComplete avec les réponses traitées");
+        // Délai minimal pour permettre à l'UI de se mettre à jour
+        setTimeout(() => {
+          onComplete(preparedResponses);
+        }, 50);
+      } else {
+        console.error("ERREUR CRITIQUE: Callback onComplete non disponible");
+        // Force reload après 1 seconde pour permettre à l'utilisateur de voir le message d'erreur
+        setError("Impossible de continuer. Rechargement automatique...");
+        setTimeout(() => window.location.reload(), 2000);
+        return;
       }
       
-      // Exécuter la sauvegarde Supabase en arrière-plan sans bloquer l'utilisateur
-      setTimeout(async () => {
+      // Exécuter la sauvegarde Supabase en parallèle sans bloquer l'utilisateur
+      Promise.resolve().then(async () => {
         try {
-          // Récupérer l'utilisateur actuel
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          // Récupérer l'utilisateur actuel avec timeout
+          const userPromise = supabase.auth.getUser();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout récupération utilisateur")), 3000)
+          );
           
-          if (userError || !user) {
-            console.error("Erreur d'authentification:", userError || "Aucun utilisateur trouvé");
-            return; // Terminer car l'utilisateur est déjà passé à la page suivante
+          const { data } = await Promise.race([userPromise, timeoutPromise]);
+          const user = data?.user;
+          
+          if (!user) {
+            console.warn("Utilisateur non authentifié, sauvegarde Supabase ignorée");
+            return;
           }
 
-          // Si l'utilisateur est disponible, procéder à l'enregistrement
-          if (user) {
-            // Préparer les données pour l'insertion
-            const responseData = {
-              user_id: user.id,
-              responses: responses,
-              updated_at: new Date().toISOString(),
-            };
-            
-            // Tentative avec user_responses (prioritaire pour compatibilité avec trigger)
-            await supabase
+          // Si l'utilisateur est disponible, procéder à l'enregistrement en parallèle
+          // Pour plus de résilience, utiliser Promise.allSettled au lieu de Promise.all
+          Promise.allSettled([
+            // 1. Sauvegarde dans user_responses
+            supabase
               .from('user_responses')
               .upsert([{
                 user_id: user.id,
                 module_id: 'onboarding',
-                responses: responses,
+                responses: preparedResponses,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
-              }], { onConflict: 'user_id,module_id' });
+              }], { onConflict: 'user_id,module_id' }),
               
-            // Mise à jour de la progression  
-            await supabase
+            // 2. Mise à jour de la progression utilisateur
+            supabase
               .from('user_progress')
               .upsert([{
                 user_id: user.id,
                 onboarding_completed: true,
-                onboarding_completed_at: new Date().toISOString(),
-              }], { onConflict: 'user_id' });
+                onboarding_completed_at: preparedResponses.completedAt,
+                updated_at: new Date().toISOString()
+              }], { onConflict: 'user_id' })
+          ]).then(results => {
+            // Vérifier les résultats
+            const [responsesResult, progressResult] = results;
             
-            console.log("Données envoyées avec succès à Supabase");
-          }
+            if (responsesResult.status === 'fulfilled') {
+              console.log("Réponses sauvegardées avec succès dans user_responses");
+            } else {
+              console.warn("Échec sauvegarde user_responses:", responsesResult.reason);
+            }
+            
+            if (progressResult.status === 'fulfilled') {
+              console.log("Progression utilisateur mise à jour avec succès");
+            } else {
+              console.warn("Échec mise à jour progression:", progressResult.reason);
+            }
+          });
         } catch (error) {
-          console.error("Erreur non-bloquante lors de la sauvegarde Supabase:", error);
-          // Ne pas afficher d'erreur car l'utilisateur est déjà passé à la page suivante
-        } finally {
-          setIsSubmitting(false);
-          setIsCompleting(false);
+          console.error("Erreur non-bloquante lors de la sauvegarde en arrière-plan:", error);
         }
-      }, 100);
+      });
       
     } catch (error) {
-      console.error("Erreur lors de la soumission des réponses:", error);
+      console.error("Erreur critique lors de la soumission des réponses:", error);
       setError("Une erreur est survenue. Nous allons continuer automatiquement...");
       
-      // En cas d'erreur critique, toujours assurer la continuité pour l'utilisateur
+      // En cas d'erreur critique, récupération d'urgence
       setTimeout(() => {
         setError(null);
         
-        // Appeler le callback même en cas d'erreur
+        // Essayer d'appeler le callback même en cas d'erreur
         if (onComplete) {
-          console.log("Tentative de récupération après erreur");
+          console.log("Tentative de récupération d'urgence après erreur");
           onComplete({
             ...responses,
             completedAt: new Date().toISOString(),
-            errorRecovery: true // Marquer que c'est une récupération d'erreur
+            errorRecovery: true
           });
         } else {
-          // Dernier recours: rechargement de la page pour essayer de récupérer
+          // Dernier recours: rechargement de la page
           window.location.reload();
         }
-      }, 2000);
+      }, 1500);
     } finally {
-      // S'assurer de réinitialiser les états après un délai
+      // Réinitialiser les états dans tous les cas
       setTimeout(() => {
         setIsSubmitting(false);
         setIsCompleting(false);
-      }, 500);
+        window.IKIGAI_ONBOARDING_COMPLETING = false;
+      }, 1000);
     }
   };
   

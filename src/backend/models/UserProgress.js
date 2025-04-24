@@ -59,12 +59,49 @@ export class UserProgress {
     return this;
   }
 
-  // Sauvegarder les réponses pour un module
+  // Sauvegarder les réponses pour un module - Version améliorée
   saveModuleResponses(moduleId, responses) {
+    // Vérifier si les réponses contiennent déjà un timestamp
+    const completedAt = responses.completedAt || new Date().toISOString();
+    
+    // Organiser proprement les données
+    this.moduleResponses = this.moduleResponses || {};
     this.moduleResponses[moduleId] = {
       responses,
-      completedAt: new Date().toISOString()
+      completedAt: completedAt
     };
+    
+    // Si c'est l'onboarding, marquer automatiquement comme complété
+    if (moduleId === 'onboarding') {
+      this.setOnboardingCompleted(true, completedAt);
+    }
+    
+    return this;
+  }
+  
+  // Méthode dédiée pour gérer l'état de complétion de l'onboarding
+  setOnboardingCompleted(isCompleted, completedAt = null) {
+    // S'assurer que completedModules est initialisé
+    this.completedModules = this.completedModules || {};
+    
+    if (isCompleted) {
+      // Marquer dans moduleResponses si pas déjà fait
+      if (!this.moduleResponses || !this.moduleResponses.onboarding) {
+        this.moduleResponses = this.moduleResponses || {};
+        this.moduleResponses.onboarding = this.moduleResponses.onboarding || {};
+        this.moduleResponses.onboarding.completedAt = completedAt || new Date().toISOString();
+      }
+      
+      // Marquer comme module complété dans la liste
+      this.completedModules.onboarding = true;
+      
+      // Si c'est la première fois, ajouter des points
+      if (!this.onboardingPoints) {
+        this.totalPoints += 200;
+        this.onboardingPoints = true;
+      }
+    }
+    
     return this;
   }
 
