@@ -10,6 +10,7 @@ import OnboardingAnalysisPage from './frontend/pages/OnboardingAnalysisPage';
 import ResetPassword from './frontend/pages/ResetPassword';
 import { LanguageProvider } from './frontend/context/LanguageContext';
 import SecureStorage from './shared/SecureStorage';
+import SessionManager from './shared/SessionManager';
 
 function App() {
   const [progress, setProgress] = useState(null);
